@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#1F3864">
-<meta name="app-build" content="20261013-4">
+<meta name="app-build" content="20261013-5">
 <title>Pouring Report</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png?v=3">
@@ -258,40 +258,46 @@ function draw(p, M){
   if (p.date) text(new Date(p.date + 'T00:00:00').toLocaleDateString('en-GB', {weekday:'short', day:'2-digit', month:'short', year:'numeric'}).replace(',', ''), W - X0 - 4, 34, {size:15, align:'right'});
   if (p.q !== '') text('Total quantity  Q = ' + fmt(M.q) + ' m³', X0 + 4, 66, {size:15, color:C.grey});
 
-  const TY = 86, TH = 62, cw = CW / 4;
-  const tile = (col, row, span, label, value, color) => { const x = X0 + col * cw, y = TY + row * TH, w = cw * span; box(x, y, w, TH, C.tile);
-    text(label, x + w/2, y + 14, {size:10.5, color:C.grey, align:'center'}); if (value !== null) text(value, x + w/2, y + 40, {size:21, color: color || C.navy, align:'center', max: w - 14}); return {x, y, w}; };
+  // tiles are rounded cards with gaps, the same look as the cards on the Report tab
+  const rr = (x, y, w, h, r, fill, stroke) => { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath();
+    if (fill) { g.fillStyle = fill; g.fill(); } if (stroke) { g.strokeStyle = stroke; g.lineWidth = 1; g.stroke(); } };
+  const TY = 86, GAP = 8, TH = 58, cw = (CW - 3 * GAP) / 4;
+  const tile = (col, row, span, label, value, color) => { const x = X0 + col * (cw + GAP), y = TY + row * (TH + GAP), w = cw * span + GAP * (span - 1); rr(x + .5, y + .5, w - 1, TH - 1, 8, C.tile, '#D5DBE6');
+    text(label, x + w/2, y + 15, {size:10.5, color:C.grey, align:'center'}); if (value !== null) text(value, x + w/2, y + 38, {size:20, color: color || C.navy, align:'center', max: w - 14}); return {x, y, w}; };
   tile(0,0,1,'REQUESTED RATE', fmt(M.reqNow) + ' m³/h');
   tile(1,0,1,'ACTUAL AVG RATE', M.avg === null ? '' : M.avg.toFixed(1) + ' m³/h', M.avg === null ? C.navy : (Math.round(M.avg*10)/10 >= M.reqNow ? C.green : C.red));
   tile(2,0,1,'LOADED', fmt(M.loaded) + ' m³');
   tile(3,0,1,'REJECTED', fmt(M.rejected) + ' m³', M.rejected > 0 ? C.red : C.navy);
-  const pt = tile(0,1,2,'PROGRESS', null);
-  if (M.progress !== null) { const bw = pt.w * .58, bx = pt.x + pt.w * .12, by = pt.y + 33, pr = Math.max(0, Math.min(1, M.progress));
-    g.fillStyle = '#D5DCE8'; g.fillRect(bx, by, bw, 14); g.fillStyle = C.navy; g.fillRect(bx, by, bw * pr, 14);
-    text(Math.round(M.progress * 100) + '%', bx + bw + 14, by + 7, {size:17}); }
+  const pt = tile(0,1,2,'PROGRESS' + (M.progress === null ? '' : ' · ' + Math.round(M.progress * 100) + '%'), null);
+  if (M.progress !== null) { const bx = pt.x + 16, bw = pt.w - 32, by = pt.y + 32, bh = 11, pr = Math.max(0, Math.min(1, M.progress));
+    rr(bx, by, bw, bh, bh / 2, '#D9DFEA'); if (pr > 0) rr(bx, by, Math.max(bh, bw * pr), bh, bh / 2, C.navy); }
   tile(2,1,1,'REMAINING', M.remaining === null ? '' : fmt(M.remaining) + ' m³');
   tile(3,1,1,'EXPECTED FINISH', M.finish);
 
   // chart
-  const CY = 222, CH = 192; box(X0, CY, CW, CH, '#fff');
+  const CY = 222, CH = 192; rr(X0 + .5, CY + .5, CW - 1, CH - 1, 9, '#fff', C.line);
   if (nRows) {
     const padL = 34, padR = 20, top = CY + 30, base = CY + CH - 30, slot = (CW - padL - padR) / nRows, bw = Math.min(150, slot * .68);
     const max = Math.max(1, ...M.hours.map(h => Math.max(h.rate, h.req))) * 1.05, yOf = v => base - (base - top) * v / max;
     g.strokeStyle = '#8c8c8c'; g.lineWidth = 1; g.beginPath(); g.moveTo(X0 + padL - 14, base + .5); g.lineTo(X0 + CW - padR + 14, base + .5); g.stroke();
     M.hours.forEach((h, i) => { const cx = X0 + padL + slot * (i + .5);
-      g.fillStyle = h.state === 'g' ? C.barG : h.state === 'r' ? C.barR : C.barP; g.fillRect(cx - bw/2, yOf(h.rate), bw, base - yOf(h.rate));
+      const bx = cx - bw/2, by = yOf(h.rate), bh = base - by, br = Math.min(7, bh);      // bars with rounded tops
+      g.fillStyle = h.state === 'g' ? C.barG : h.state === 'r' ? C.barR : C.barP;
+      if (bh > 0) { g.beginPath(); g.moveTo(bx, base); g.lineTo(bx, by + br); g.arcTo(bx, by, bx + br, by, br); g.lineTo(bx + bw - br, by); g.arcTo(bx + bw, by, bx + bw, by + br, br); g.lineTo(bx + bw, base); g.closePath(); g.fill(); }
       text(h.short, cx, base + 15, {size:11.5, bold:false, color:'#222', align:'center'}); });
     g.strokeStyle = C.navy; g.lineWidth = 2.5; g.setLineDash([9,6]); g.beginPath();
     M.hours.forEach((h, i) => { const x1 = X0 + padL + slot * i + (i ? 0 : slot * .12), x2 = X0 + padL + slot * (i + 1) - (i === nRows - 1 ? slot * .12 : 0), y = yOf(h.req); if (i) g.lineTo(x1, y); else g.moveTo(x1, y); g.lineTo(x2, y); });
     g.stroke(); g.setLineDash([]);
     M.hours.forEach((h, i) => { const cx = X0 + padL + slot * (i + .5); let y = yOf(h.rate) - 10; if (Math.abs(y - yOf(h.req)) < 9) y = yOf(Math.max(h.rate, h.req)) - 13;
-      const w = g.measureText(fmt(h.rate)).width; g.fillStyle = 'rgba(255,255,255,.85)'; g.fillRect(cx - w/2 - 5, y - 8, w + 10, 16); text(fmt(h.rate), cx, y, {size:12, bold:false, color:'#111', align:'center'}); });
+      const w = g.measureText(fmt(h.rate)).width; rr(cx - w/2 - 5, y - 8, w + 10, 16, 5, 'rgba(255,255,255,.85)'); text(fmt(h.rate), cx, y, {size:12, bold:false, color:'#111', align:'center'}); });
   }
 
   // table
   const cols = [130, 58, 58, 58, 58, 58, 74]; cols.push(CW - cols.reduce((a, b) => a + b, 0));
   const xs = []; cols.reduce((a, w) => (xs.push(a), a + w), X0);
   const heads = ['TIME', ...p.plants, 'RATE|m³/h', 'COMMENTS'];
+  const tableH = 40 + nRows * RH + (nRows ? RH : 0);      // the whole table sits inside one rounded frame
+  g.save(); rr(X0 + .5, tableTop + .5, CW - 1, tableH - 1, 9); g.clip();
   g.fillStyle = C.navy; g.fillRect(X0, tableTop, CW, 40);
   heads.forEach((h, i) => { const cx = xs[i] + cols[i]/2, a = h.split('|'); if (a.length > 1) { text(a[0], cx, tableTop + 13, {size:13, color:'#fff', align:'center'}); text(a[1], cx, tableTop + 28, {size:12, color:'#fff', align:'center'}); } else text(h, cx, tableTop + 20, {size:13, color:'#fff', align:'center', max: cols[i] - 6});
     if (i) { g.strokeStyle = '#fff'; g.beginPath(); g.moveTo(xs[i] + .5, tableTop); g.lineTo(xs[i] + .5, tableTop + 40); g.stroke(); } });
@@ -309,6 +315,7 @@ function draw(p, M){
   if (nRows) { box(X0, y, CW, RH, C.tot); text('TOTAL', xs[0] + cols[0]/2, y + RH/2, {size:14, color:'#000', align:'center'});
     for (let k = 0; k < 5; k++) text(fmt(M.totals[k]), xs[k+1] + cols[k+1]/2, y + RH/2, {size:14, color:'#000', align:'center'});
     text(fmt(M.loaded), xs[6] + cols[6]/2, y + RH/2, {size:14, color:'#000', align:'center'}); }
+  g.restore(); rr(X0 + .5, tableTop + .5, CW - 1, tableH - 1, 9, null, C.line);
 }
 
 /* ====== rendering ====== */
