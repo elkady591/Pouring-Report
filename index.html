@@ -1,0 +1,505 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1F3864">
+<meta name="app-build" content="20261013-3">
+<title>Pouring Report</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+:root{--navy:#1F3864;--grey:#595959;--line:#BFBFBF;--tile:#F3F6FA;--green:#00863D;--red:#C00000;--amber:#C55A11;--bg:#EEF1F6}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{font-family:"Segoe UI",Roboto,Arial,sans-serif;background:var(--bg);color:#222;font-size:15px;-webkit-text-size-adjust:100%}
+header{position:sticky;top:0;z-index:5;background:var(--navy);color:#fff;padding:10px 14px;display:flex;align-items:center;gap:10px}
+header h1{font-size:17px;margin:0;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+header small{display:block;font-weight:400;font-size:12px;opacity:.8}
+#sync{font-size:12px;padding:3px 8px;border-radius:10px;background:rgba(255,255,255,.18);white-space:nowrap}
+main{padding:12px 12px 84px;max-width:920px;margin:0 auto}
+nav{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--line);display:flex;z-index:5;padding-bottom:env(safe-area-inset-bottom)}
+nav button{flex:1;border:0;background:none;padding:10px 4px 9px;font:inherit;font-size:13px;color:var(--grey);border-top:3px solid transparent}
+nav button.on{color:var(--navy);font-weight:700;border-top-color:var(--navy)}
+nav b{display:block;font-size:19px;line-height:1.1}
+.view{display:none}.view.on{display:block}
+.card{background:#fff;border:1px solid #dfe3ea;border-radius:10px;padding:12px;margin-bottom:12px}
+.card h2{margin:0 0 10px;font-size:14px;color:var(--navy);text-transform:uppercase;letter-spacing:.4px}
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.tile{background:var(--tile);border:1px solid #d5dbe6;border-radius:8px;padding:8px 6px;text-align:center}
+.tile span{display:block;font-size:10.5px;font-weight:700;color:var(--grey);letter-spacing:.3px}
+.tile b{display:block;font-size:19px;color:var(--navy);margin-top:2px}
+.tile.wide{grid-column:1/3}
+.bar{height:10px;background:#d9dfea;border-radius:5px;overflow:hidden;margin:6px 8px 2px}
+.bar i{display:block;height:100%;background:var(--navy)}
+.good{color:var(--green)!important}.bad{color:var(--red)!important}
+button.big{width:100%;border:0;border-radius:10px;background:var(--navy);color:#fff;font:inherit;font-weight:700;font-size:16px;padding:13px;margin-bottom:12px}
+button.big.alt{background:#fff;color:var(--navy);border:1.5px solid var(--navy)}
+button.big.warn{background:#fff;color:var(--red);border:1.5px solid var(--red)}
+button.sm{border:1px solid var(--line);background:#fff;border-radius:7px;padding:6px 10px;font:inherit;font-size:13px}
+#picwrap{overflow:auto;border:1px solid #dfe3ea;border-radius:8px;background:#fff}
+#pic{display:block;width:100%;height:auto}
+#picwrap.zoom #pic{width:880px}
+label{display:block;font-size:12.5px;color:var(--grey);margin:8px 0 3px;font-weight:600}
+input,textarea,select{width:100%;font:inherit;padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:#FFFDF3}
+textarea{min-height:120px;resize:vertical;direction:ltr}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.hour{border-top:1px solid #e6e9ef;padding:8px 0}
+.hour:first-of-type{border-top:0}
+.hour .h{display:flex;align-items:center;gap:8px;font-weight:700}
+.hour .h span{flex:1}
+.chip{display:inline-block;min-width:54px;text-align:center;border-radius:6px;padding:2px 6px;font-weight:700}
+.chip.g{background:#C6EFCE;color:#006100}.chip.r{background:#FFC7CE;color:#9C0006}.chip.p{background:#EDEDED;color:var(--grey);font-style:italic}
+.hour .e{display:grid;grid-template-columns:110px 1fr;gap:8px;margin-top:6px}
+.hour .e input{padding:6px 8px;font-size:14px}
+.msg{border-top:1px solid #e6e9ef;padding:7px 0;font-size:13.5px}
+.msg .top{display:flex;gap:8px;align-items:center}
+.msg .n{width:30px;color:var(--grey);font-size:12px}
+.msg .t{width:44px;font-weight:700}.msg .p{width:30px}.msg .q{width:54px;text-align:right}
+.msg .f{flex:1;text-align:right;font-size:12px}
+.msg .raw{color:#777;font-size:12px;direction:ltr;word-break:break-word;margin-top:2px}
+.msg.warn{background:#FFF7DB}.msg.rej .q{color:var(--red);text-decoration:line-through}
+.msg .ed{display:none;margin-top:6px}.msg.open .ed{display:block}
+.msg .ed .btns{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.flag-w{color:#9a5b00;font-weight:700}.flag-i{color:#2E75B6}
+.pour{display:flex;align-items:center;gap:8px;border-top:1px solid #e6e9ef;padding:8px 0}
+.pour div{flex:1}.pour small{color:var(--grey);display:block}
+#toast{position:fixed;left:50%;bottom:92px;transform:translateX(-50%);background:#222;color:#fff;padding:9px 14px;border-radius:18px;font-size:13.5px;opacity:0;transition:opacity .25s;pointer-events:none;z-index:9;max-width:90%;text-align:center}
+#toast.on{opacity:.95}
+.muted{color:var(--grey);font-size:12.5px}
+@media(min-width:760px){.tiles{grid-template-columns:repeat(4,1fr)}.tile.wide{grid-column:span 2}}
+</style>
+</head>
+<body>
+<header><h1>Pouring Report<small id="hTitle"></small></h1><span id="sync">local</span></header>
+<main>
+  <section class="view on" id="v-report">
+    <div class="card"><div class="tiles" id="tiles"></div></div>
+    <button class="big" id="bShare">Share picture to WhatsApp</button>
+    <div class="card"><h2>Picture preview <button class="sm" id="bZoom" style="float:right;margin-top:-4px">Zoom</button></h2>
+      <div id="picwrap"><canvas id="pic"></canvas></div></div>
+    <div class="card"><h2>Hours — rate change &amp; comments</h2><div id="hours"></div></div>
+  </section>
+
+  <section class="view" id="v-msgs">
+    <div class="card"><h2>Paste messages from the group</h2>
+      <textarea id="paste" placeholder="Copy the truck messages in WhatsApp and paste them here…"></textarea>
+      <div style="display:flex;gap:8px;margin-top:8px"><button class="big" id="bAdd" style="margin:0">Add messages</button></div>
+      <div class="muted" id="addInfo" style="margin-top:8px"></div></div>
+    <div class="card"><h2 id="mHead">Messages</h2><div id="msgs"></div></div>
+  </section>
+
+  <section class="view" id="v-setup">
+    <div class="card"><h2>Pour setup</h2>
+      <label>Title</label><input id="sTitle" data-k="title">
+      <div class="row2"><div><label>Date</label><input id="sDate" type="date" data-k="date"></div>
+        <div><label>Start time (optional)</label><input id="sStart" type="time" data-k="start"></div></div>
+      <div class="row2"><div><label>Total quantity Q (m³)</label><input id="sQ" type="number" inputmode="decimal" data-k="q"></div>
+        <div><label>Requested rate (m³/h)</label><input id="sReq" type="number" inputmode="decimal" data-k="req"></div></div>
+      <label>Rejected m³ (manual, optional)</label><input id="sRej" type="number" inputmode="decimal" data-k="rejManual">
+      <label>Plant names (#1 … #5)</label><div id="plants" style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px"></div>
+    </div>
+    <button class="big alt" id="bXls">Download this pour as Excel</button>
+    <button class="big alt" id="bNew">New pour</button>
+    <div class="card"><h2>Saved pours</h2><div id="pours"></div></div>
+    <div class="card"><h2>Sync between phone and laptop</h2>
+      <div class="muted" id="syncInfo"></div>
+      <label>Sync password</label><input id="sPwd" type="password" autocomplete="off" placeholder="Same password on every device">
+      <div style="display:flex;gap:8px;margin-top:8px"><button class="sm" id="bPwd">Save password</button><button class="sm" id="bSync">Sync now</button><button class="sm" id="bOff">Turn sync off on this device</button></div>
+    </div>
+    <button class="big warn" id="bDel">Delete this pour</button>
+    <div class="muted" style="text-align:center">build <span id="build"></span></div>
+  </section>
+</main>
+<nav>
+  <button data-v="report" class="on"><b>▤</b>Report</button>
+  <button data-v="msgs"><b>✉</b>Messages</button>
+  <button data-v="setup"><b>⚙</b>Setup</button>
+</nav>
+<div id="toast"></div>
+
+<script>
+'use strict';
+/* ====== settings ====== */
+const QS = new URLSearchParams(location.search);
+const SYNC_URL = QS.get('sync') || 'https://script.google.com/macros/s/AKfycbwdc91ZDEERMKNh3uU2o8xb3kWil258-Oin4c-9OwEUutIPzdCryvbxSuucHLa8mVw7/exec';                       // Apps Script web app URL (set after deployment)
+const LS = 'pouringreport:v1' + (QS.get('dev') ? ':' + QS.get('dev') : '');
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+/* ====== state ====== */
+let S = load();
+function load(){
+  let s = null; try { s = JSON.parse(localStorage.getItem(LS)); } catch(e){}
+  if (!s || !s.pours) s = {cur:null, pours:{}, key:null};
+  if (!s.cur || !s.pours[s.cur] || s.pours[s.cur].deleted) { const p = newPour(); s.pours[p.id] = p; s.cur = p.id; }
+  return s;
+}
+function newPour(){
+  const d = new Date(), z = n => String(n).padStart(2,'0');
+  return {id: Date.now().toString(36) + Math.random().toString(36).slice(2,6), title:'', date: d.getFullYear()+'-'+z(d.getMonth()+1)+'-'+z(d.getDate()),
+          q:'', req:'', start:'', rejManual:'', plants:['L1','L2','V3','V4','V5'], msgs:[], del:[], changes:{}, comments:{}, at:Date.now(), rev:0, dirty:true};
+}
+const cur = () => S.pours[S.cur];
+function save(touch){
+  if (touch !== false) { cur().at = Date.now(); cur().dirty = true; queueSync(); }
+  try { localStorage.setItem(LS, JSON.stringify(S)); } catch(e){ toast('Storage is full on this device'); }
+}
+
+/* ====== message parsing (same rules as the Excel sheet) ====== */
+const AR = '٠١٢٣٤٥٦٧٨٩';
+function cleanLine(s){
+  let t = String(s).replace(/[٠-٩]/g, d => AR.indexOf(d)).replace(/[‎‏‪-‮]/g,'').trim();
+  if (t[0] === '[') { const i = t.indexOf(']'), j = t.indexOf(': ', i); if (i > 0 && j > 0) t = t.slice(j + 2).trim(); }
+  return t;
+}
+function parseMsg(t){
+  const o = {raw:null, plant:null, qty:null, serial:null};
+  const tm = t.match(/(?:^|[^\d])(\d{1,2}):(\d{2})(?!\d)/);
+  if (tm && +tm[1] < 24 && +tm[2] < 60) o.raw = +tm[1]*60 + +tm[2];
+  const pm = t.match(/#\s*([1-5])/); if (pm) o.plant = +pm[1] - 1;
+  const qm = t.match(/(\d+(?:\.\d+)?)\s*[mMم](?![A-Za-z])/); if (qm) o.qty = +qm[1];
+  if (o.raw !== null || o.plant !== null) { const sm = t.replace(/[*_]/g,'').trim().match(/^(\d{1,4})(?!\d)/); if (sm) o.serial = +sm[1]; }
+  return o;
+}
+function isNoise(t){ const p = parseMsg(t); return p.raw === null && p.plant === null && p.qty === null; }
+
+/* ====== calculations ====== */
+const fmt = n => { if (n === '' || n === null || isNaN(n)) return ''; const r = Math.round(n*10)/10; return Math.abs(r) >= 1000 ? Math.round(r).toLocaleString('en-US') : String(r); };
+const hhmm = m => { m = ((Math.round(m) % 1440) + 1440) % 1440; return String(Math.floor(m/60)).padStart(2,'0') + ':' + String(m%60).padStart(2,'0'); };
+function compute(p){
+  const rows = [], seen = new Set(), serials = [];
+  let prevMax = 0, n = 0;
+  p.msgs.forEach((m, idx) => {
+    const t = cleanLine(m.t), r = Object.assign({idx, text:t, rej:m.r, flag:'', warn:false}, parseMsg(t));
+    if (seen.has(t)) { r.dup = true; r.flag = 'Duplicate (not counted)'; r.warn = true; rows.push(r); return; }
+    seen.add(t);
+    if (r.raw !== null) { r.t = r.raw + 720 * Math.max(0, Math.ceil((prevMax - 30 - r.raw) / 720)); }
+    r.n = ++n;
+    if (r.raw === null) { r.flag = 'Time'; r.warn = true; }
+    else if (r.plant === null) { r.flag = 'Plant'; r.warn = true; }
+    else if (r.qty === null) { r.flag = 'Quantity'; r.warn = true; }
+    else if (r.serial !== null && serials.includes(r.serial)) { r.flag = 'Same serial ' + r.serial; r.warn = true; }
+    else if (prevMax > 0 && r.t - prevMax > 180) { r.flag = 'Gap > 3h'; r.warn = true; }
+    else if (r.t - r.raw >= 1440) r.flag = 'next day';
+    else if (r.t - r.raw >= 720) r.flag = '12h → 24h';
+    if (r.serial !== null) serials.push(r.serial);
+    if (r.t !== undefined) prevMax = Math.max(prevMax, r.t);
+    r.rejQty = !m.r ? 0 : (typeof m.r === 'number' ? m.r : (r.qty || 0));
+    rows.push(r);
+  });
+  const minS = serials.length ? Math.min(...serials) : 0;
+  rows.forEach(r => { if (!r.flag && r.serial !== null && r.serial > minS && !serials.includes(r.serial - 1) && serials.filter(x => x === r.serial - 2).length < 2) { r.flag = 'Missing serial ' + (r.serial - 1); r.warn = true; } });
+
+  const live = rows.filter(r => !r.dup), timed = live.filter(r => r.t !== undefined);
+  const M = {rows, hours:[], totals:[0,0,0,0,0], trucks: timed.length, toCheck: rows.filter(r => r.warn && !r.dup).length};
+  M.loaded = live.reduce((a, r) => a + (r.qty || 0), 0);
+  M.rejected = live.reduce((a, r) => a + r.rejQty, 0) + (+p.rejManual || 0);
+  M.q = +p.q || 0;
+  M.remaining = p.q === '' ? null : M.q - M.loaded + M.rejected;
+  M.progress = M.q > 0 ? (M.loaded - M.rejected) / M.q : null;
+  live.forEach(r => { if (r.plant !== null && r.qty) M.totals[r.plant] += r.qty; });
+  if (timed.length) {
+    const first = Math.min(...timed.map(r => r.t)), last = Math.max(...timed.map(r => r.t));
+    let start = Math.round(first / 15) * 15;
+    if (p.start) { const a = p.start.split(':'); start = +a[0]*60 + +a[1]; }
+    const nH = Math.max(1, Math.min(48, Math.floor((last - start) / 60) + 1));
+    let req = +p.req || 0;
+    for (let i = 0; i < nH; i++) {
+      const lab = start + 60*i, from = i === 0 ? Math.min(start, first) : lab, to = lab + 60, key = String(lab);
+      const h = {key, label: hhmm(lab) + ' – ' + hhmm(to), short: hhmm(lab), plants:[0,0,0,0,0], rate:0, trucks:0, last: i === nH - 1};
+      timed.forEach(r => { if (r.t >= from && r.t < to) { h.rate += r.qty || 0; h.trucks++; if (r.plant !== null) h.plants[r.plant] += r.qty || 0; } });
+      const ch = p.changes[key];
+      h.changed = ch !== undefined && ch !== '' && +ch !== req;
+      if (ch !== undefined && ch !== '') req = +ch;
+      h.req = req;
+      h.comment = p.comments[key] || '';
+      h.auto = !h.comment && ch !== undefined && ch !== '' ? ch : null;
+      h.state = h.rate >= req ? 'g' : (h.last ? 'p' : 'r');
+      M.hours.push(h);
+    }
+    M.first = first; M.last = last; M.reqNow = req;
+    M.avg = last - first >= 30 ? M.loaded / ((last - first) / 60) : null;
+  } else { M.reqNow = +p.req || 0; M.avg = null; }
+  M.finish = finishText(p, M);
+  return M;
+}
+function finishText(p, M){
+  if (M.remaining === null || M.avg === null) return '—';
+  if (M.remaining <= 0) return 'Done';
+  if (M.avg <= 0) return '—';
+  const f = M.last + M.remaining / M.avg * 60;
+  const base = p.date ? new Date(p.date + 'T00:00:00') : new Date(); base.setHours(0,0,0,0);
+  const dt = new Date(base.getTime()); dt.setDate(dt.getDate() + Math.floor(f / 1440) - Math.floor(M.first / 1440));
+  const today = new Date(); today.setHours(0,0,0,0);
+  const diff = Math.round((dt - today) / 864e5);
+  const day = diff === 0 ? 'Today' : diff === 1 ? 'Tomorrow' : dt.toLocaleDateString('en-GB', {weekday:'short', day:'numeric', month:'short'}).replace(',', '');
+  const m = ((Math.floor(f) % 1440) + 1440) % 1440, h = Math.floor(m / 60);   // whole minutes, like the Excel sheet
+  return day + ' ' + ((h + 11) % 12 + 1) + ':' + String(m % 60).padStart(2,'0') + (h < 12 ? ' AM' : ' PM');
+}
+
+/* ====== picture (canvas) ====== */
+const C = {navy:'#1F3864', grey:'#595959', line:'#BFBFBF', tile:'#F3F6FA', green:'#00863D', red:'#C00000', gF:'#C6EFCE', gT:'#006100', rF:'#FFC7CE', rT:'#9C0006', pF:'#EDEDED',
+           barG:'#005A00', barR:'#C00000', barP:'#A6A6A6', time:'#F2F2F2', tot:'#DDE3EE', yellow:'#FFFF00'};
+const FONT = '"Segoe UI",Roboto,Arial,sans-serif';
+function draw(p, M){
+  const cv = $('pic'), W = 880, X0 = 20, CW = W - 40, SC = 2;
+  const nRows = M.hours.length, tableTop = 428, RH = 27, H = tableTop + 40 + nRows * RH + (nRows ? RH : 0) + 22;
+  cv.width = W * SC; cv.height = H * SC;
+  const g = cv.getContext('2d'); g.setTransform(SC,0,0,SC,0,0);
+  g.fillStyle = '#fff'; g.fillRect(0,0,W,H);
+  const text = (s, x, y, o) => { o = o || {}; g.font = (o.italic ? 'italic ' : '') + (o.bold === false ? '' : 'bold ') + (o.size || 14) + 'px ' + FONT; g.fillStyle = o.color || C.navy; g.textAlign = o.align || 'left'; g.textBaseline = 'middle';
+    if (o.max) { let sz = o.size || 14; while (g.measureText(s).width > o.max && sz > 8) { sz -= 0.5; g.font = (o.bold === false ? '' : 'bold ') + sz + 'px ' + FONT; } }
+    g.fillText(s, x, y); return g.measureText(s).width; };
+  const box = (x, y, w, h, fill, stroke) => { if (fill) { g.fillStyle = fill; g.fillRect(x, y, w, h); } if (stroke !== false) { g.strokeStyle = stroke || C.line; g.lineWidth = 1; g.strokeRect(x + .5, y + .5, w, h); } };
+
+  text(p.title || 'POURING REPORT', X0 + 4, 34, {size:27, max: CW - 190});
+  if (p.date) text(new Date(p.date + 'T00:00:00').toLocaleDateString('en-GB', {weekday:'short', day:'2-digit', month:'short', year:'numeric'}).replace(',', ''), W - X0 - 4, 34, {size:15, align:'right'});
+  if (p.q !== '') text('Total quantity  Q = ' + fmt(M.q) + ' m³', X0 + 4, 66, {size:15, color:C.grey});
+
+  const TY = 86, TH = 62, cw = CW / 4;
+  const tile = (col, row, span, label, value, color) => { const x = X0 + col * cw, y = TY + row * TH, w = cw * span; box(x, y, w, TH, C.tile);
+    text(label, x + w/2, y + 14, {size:10.5, color:C.grey, align:'center'}); if (value !== null) text(value, x + w/2, y + 40, {size:21, color: color || C.navy, align:'center', max: w - 14}); return {x, y, w}; };
+  tile(0,0,1,'REQUESTED RATE', fmt(M.reqNow) + ' m³/h');
+  tile(1,0,1,'ACTUAL AVG RATE', M.avg === null ? '' : M.avg.toFixed(1) + ' m³/h', M.avg === null ? C.navy : (Math.round(M.avg*10)/10 >= M.reqNow ? C.green : C.red));
+  tile(2,0,1,'LOADED', fmt(M.loaded) + ' m³');
+  tile(3,0,1,'REJECTED', fmt(M.rejected) + ' m³', M.rejected > 0 ? C.red : C.navy);
+  const pt = tile(0,1,2,'PROGRESS', null);
+  if (M.progress !== null) { const bw = pt.w * .58, bx = pt.x + pt.w * .12, by = pt.y + 33, pr = Math.max(0, Math.min(1, M.progress));
+    g.fillStyle = '#D5DCE8'; g.fillRect(bx, by, bw, 14); g.fillStyle = C.navy; g.fillRect(bx, by, bw * pr, 14);
+    text(Math.round(M.progress * 100) + '%', bx + bw + 14, by + 7, {size:17}); }
+  tile(2,1,1,'REMAINING', M.remaining === null ? '' : fmt(M.remaining) + ' m³');
+  tile(3,1,1,'EXPECTED FINISH', M.finish);
+
+  // chart
+  const CY = 222, CH = 192; box(X0, CY, CW, CH, '#fff');
+  if (nRows) {
+    const padL = 34, padR = 20, top = CY + 30, base = CY + CH - 30, slot = (CW - padL - padR) / nRows, bw = Math.min(150, slot * .68);
+    const max = Math.max(1, ...M.hours.map(h => Math.max(h.rate, h.req))) * 1.05, yOf = v => base - (base - top) * v / max;
+    g.strokeStyle = '#8c8c8c'; g.lineWidth = 1; g.beginPath(); g.moveTo(X0 + padL - 14, base + .5); g.lineTo(X0 + CW - padR + 14, base + .5); g.stroke();
+    M.hours.forEach((h, i) => { const cx = X0 + padL + slot * (i + .5);
+      g.fillStyle = h.state === 'g' ? C.barG : h.state === 'r' ? C.barR : C.barP; g.fillRect(cx - bw/2, yOf(h.rate), bw, base - yOf(h.rate));
+      text(h.short, cx, base + 15, {size:11.5, bold:false, color:'#222', align:'center'}); });
+    g.strokeStyle = C.navy; g.lineWidth = 2.5; g.setLineDash([9,6]); g.beginPath();
+    M.hours.forEach((h, i) => { const x1 = X0 + padL + slot * i + (i ? 0 : slot * .12), x2 = X0 + padL + slot * (i + 1) - (i === nRows - 1 ? slot * .12 : 0), y = yOf(h.req); if (i) g.lineTo(x1, y); else g.moveTo(x1, y); g.lineTo(x2, y); });
+    g.stroke(); g.setLineDash([]);
+    M.hours.forEach((h, i) => { const cx = X0 + padL + slot * (i + .5); let y = yOf(h.rate) - 10; if (Math.abs(y - yOf(h.req)) < 9) y = yOf(Math.max(h.rate, h.req)) - 13;
+      const w = g.measureText(fmt(h.rate)).width; g.fillStyle = 'rgba(255,255,255,.85)'; g.fillRect(cx - w/2 - 5, y - 8, w + 10, 16); text(fmt(h.rate), cx, y, {size:12, bold:false, color:'#111', align:'center'}); });
+  }
+
+  // table
+  const cols = [130, 58, 58, 58, 58, 58, 74]; cols.push(CW - cols.reduce((a, b) => a + b, 0));
+  const xs = []; cols.reduce((a, w) => (xs.push(a), a + w), X0);
+  const heads = ['TIME', ...p.plants, 'RATE|m³/h', 'COMMENTS'];
+  g.fillStyle = C.navy; g.fillRect(X0, tableTop, CW, 40);
+  heads.forEach((h, i) => { const cx = xs[i] + cols[i]/2, a = h.split('|'); if (a.length > 1) { text(a[0], cx, tableTop + 13, {size:13, color:'#fff', align:'center'}); text(a[1], cx, tableTop + 28, {size:12, color:'#fff', align:'center'}); } else text(h, cx, tableTop + 20, {size:13, color:'#fff', align:'center', max: cols[i] - 6});
+    if (i) { g.strokeStyle = '#fff'; g.beginPath(); g.moveTo(xs[i] + .5, tableTop); g.lineTo(xs[i] + .5, tableTop + 40); g.stroke(); } });
+  let y = tableTop + 40;
+  M.hours.forEach(h => {
+    box(xs[0], y, cols[0], RH, C.time); text(h.label, xs[0] + cols[0]/2, y + RH/2, {size:14, color:'#000', align:'center'});
+    for (let k = 0; k < 5; k++) { box(xs[k+1], y, cols[k+1], RH, '#fff'); if (h.plants[k]) text(fmt(h.plants[k]), xs[k+1] + cols[k+1]/2, y + RH/2, {size:14, bold:false, color:'#000', align:'center'}); }
+    box(xs[6], y, cols[6], RH, h.state === 'g' ? C.gF : h.state === 'r' ? C.rF : C.pF); text(fmt(h.rate), xs[6] + cols[6]/2, y + RH/2, {size:14, italic: h.state === 'p', color: h.state === 'g' ? C.gT : h.state === 'r' ? C.rT : C.grey, align:'center'});
+    const has = h.comment || h.auto !== null; box(xs[7], y, cols[7], RH, has ? C.yellow : '#fff');
+    if (h.comment) text(h.comment, xs[7] + cols[7]/2, y + RH/2, {size:13, bold:false, color:'#000', align:'center', max: cols[7] - 12});
+    else if (h.auto !== null) { g.font = '13px ' + FONT; const a = 'Client asked for ', b = String(h.auto), c = ' m³/h.', wa = g.measureText(a).width, wb = g.measureText(b).width, wc = g.measureText(c).width; let x = xs[7] + (cols[7] - wa - wb - wc) / 2;
+      text(a, x, y + RH/2, {size:13, bold:false, color:'#000'}); text(b, x + wa, y + RH/2, {size:13, bold:false, color:'#FF0000'}); text(c, x + wa + wb, y + RH/2, {size:13, bold:false, color:'#000'}); }
+    y += RH;
+  });
+  if (nRows) { box(X0, y, CW, RH, C.tot); text('TOTAL', xs[0] + cols[0]/2, y + RH/2, {size:14, color:'#000', align:'center'});
+    for (let k = 0; k < 5; k++) text(fmt(M.totals[k]), xs[k+1] + cols[k+1]/2, y + RH/2, {size:14, color:'#000', align:'center'});
+    text(fmt(M.loaded), xs[6] + cols[6]/2, y + RH/2, {size:14, color:'#000', align:'center'}); }
+}
+
+/* ====== rendering ====== */
+let M = null;
+function render(){
+  const p = cur(); M = compute(p);
+  $('hTitle').textContent = p.title || 'New pour';
+  const t = (l, v, cls, wide) => `<div class="tile${wide ? ' wide' : ''}"><span>${l}</span><b class="${cls || ''}">${v}</b></div>`;
+  $('tiles').innerHTML =
+    t('LOADED', fmt(M.loaded) + ' m³') + t('REMAINING', M.remaining === null ? '—' : fmt(M.remaining) + ' m³') +
+    t('ACTUAL AVG RATE', M.avg === null ? '—' : M.avg.toFixed(1) + ' m³/h', M.avg === null ? '' : (Math.round(M.avg*10)/10 >= M.reqNow ? 'good' : 'bad')) + t('REQUESTED RATE', fmt(M.reqNow) + ' m³/h') +
+    t('EXPECTED FINISH', '<span style="display:inline;font-size:16px;color:inherit;letter-spacing:0">' + M.finish + '</span>') + t('REJECTED', fmt(M.rejected) + ' m³', M.rejected > 0 ? 'bad' : '') +
+    `<div class="tile wide"><span>PROGRESS${M.progress === null ? '' : ' · ' + Math.round(M.progress*100) + '%'} · ${M.trucks} TRUCKS${M.toCheck ? ' · <span style="display:inline;color:#9a5b00">⚠ ' + M.toCheck + ' TO CHECK</span>' : ''}</span><div class="bar"><i style="width:${Math.max(0, Math.min(1, M.progress || 0))*100}%"></i></div></div>`;
+  draw(p, M);
+  $('hours').innerHTML = M.hours.length ? M.hours.map(h => `<div class="hour"><div class="h"><span>${h.label}</span><em class="muted" style="font-style:normal">${h.trucks} trucks</em><i class="chip ${h.state}" style="font-style:${h.state === 'p' ? 'italic' : 'normal'}">${fmt(h.rate)}</i></div>
+      <div class="e"><input type="number" inputmode="decimal" placeholder="Client asked" data-ch="${h.key}" value="${esc(p.changes[h.key] === undefined ? '' : p.changes[h.key])}"><input placeholder="Comment" data-cm="${h.key}" value="${esc(h.comment)}"></div></div>`).join('') : '<div class="muted">Add messages to see the hours.</div>';
+  renderMsgs(); renderSetup(); renderSync();
+}
+function renderMsgs(){
+  const p = cur();
+  $('mHead').textContent = `Messages · ${M.trucks} trucks · ${fmt(M.loaded)} m³` + (M.toCheck ? ` · ⚠ ${M.toCheck}` : '');
+  $('msgs').innerHTML = M.rows.length ? M.rows.slice().reverse().map(r => `<div class="msg${r.warn ? ' warn' : ''}${r.rej ? ' rej' : ''}" data-i="${r.idx}">
+    <div class="top"><span class="n">${r.n || ''}</span><span class="t">${r.t === undefined ? '--:--' : hhmm(r.t)}</span><span class="p">${r.plant === null ? '?' : esc(p.plants[r.plant])}</span><span class="q">${r.qty === null ? '?' : fmt(r.qty) + ' m³'}</span>
+      <span class="f ${r.warn ? 'flag-w' : 'flag-i'}">${r.warn ? '⚠ ' : ''}${esc(r.flag)}${r.rej ? ' · rejected ' + fmt(r.rejQty) : ''}</span></div>
+    <div class="raw">${esc(r.text)}</div>
+    <div class="ed"><input data-edit value="${esc(r.text)}"><div class="btns"><button class="sm" data-a="save">Save text</button><button class="sm" data-a="rej">${r.rej ? 'Not rejected' : 'Rejected (whole truck)'}</button><button class="sm" data-a="part">Rejected part…</button><button class="sm" data-a="del" style="color:#C00000">Delete</button></div></div></div>`).join('') : '<div class="muted">No messages yet.</div>';
+}
+function renderSetup(){
+  const p = cur();
+  document.querySelectorAll('#v-setup [data-k]').forEach(el => { if (document.activeElement !== el) el.value = p[el.dataset.k]; });
+  if (!$('plants').children.length) $('plants').innerHTML = [0,1,2,3,4].map(i => `<input data-pl="${i}">`).join('');
+  document.querySelectorAll('[data-pl]').forEach(el => { if (document.activeElement !== el) el.value = p.plants[el.dataset.pl]; });
+  const list = Object.values(S.pours).filter(x => !x.deleted).sort((a, b) => (b.date || '').localeCompare(a.date || '') || b.at - a.at);
+  $('pours').innerHTML = list.map(x => { const m = x.id === p.id ? M : compute(x); return `<div class="pour"><div><b>${esc(x.title || 'Untitled pour')}</b><small>${esc(x.date || '')} · ${fmt(m.loaded)} m³${x.q !== '' ? ' of ' + fmt(+x.q) : ''}</small></div>${x.id === p.id ? '<span class="muted">open</span>' : `<button class="sm" data-open="${x.id}">Open</button>`}</div>`; }).join('');
+  $('build').textContent = document.querySelector('meta[name=app-build]').content;
+}
+
+/* ====== actions ====== */
+function toast(s){ const t = $('toast'); t.textContent = s; t.classList.add('on'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('on'), 2600); }
+document.querySelector('nav').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return;
+  document.querySelectorAll('nav button').forEach(x => x.classList.toggle('on', x === b)); document.querySelectorAll('.view').forEach(v => v.classList.toggle('on', v.id === 'v-' + b.dataset.v)); window.scrollTo(0, 0); });
+$('bAdd').onclick = () => {
+  const p = cur(), have = new Set(p.msgs.map(m => cleanLine(m.t))); let added = 0, dup = 0, noise = 0;
+  $('paste').value.split(/\r?\n/).forEach(line => { const t = cleanLine(line); if (!t) return; if (isNoise(t)) { noise++; return; } if (have.has(t)) { dup++; return; }
+    have.add(t); p.msgs.push({t, r:null}); p.del = p.del.filter(d => d !== t); added++; });
+  $('paste').value = ''; save(); render();
+  $('addInfo').textContent = `${added} added` + (dup ? ` · ${dup} already there (skipped)` : '') + (noise ? ` · ${noise} lines ignored (not truck messages)` : '');
+  toast(added ? added + ' messages added' : 'Nothing new to add');
+};
+$('msgs').addEventListener('click', e => {
+  const row = e.target.closest('.msg'); if (!row) return; const p = cur(), i = +row.dataset.i, a = e.target.dataset.a;
+  if (!a) { if (!e.target.closest('.ed')) row.classList.toggle('open'); return; }
+  const m = p.msgs[i];
+  if (a === 'save') { const t = cleanLine(row.querySelector('[data-edit]').value); if (t) { p.del.push(cleanLine(m.t)); m.t = t; } }
+  if (a === 'rej') m.r = m.r ? null : 'x';
+  if (a === 'part') { const v = prompt('Rejected quantity from this truck (m³):', typeof m.r === 'number' ? m.r : ''); if (v === null) return; m.r = +v > 0 ? +v : null; }
+  if (a === 'del') { if (!confirm('Delete this message?')) return; p.del.push(cleanLine(m.t)); p.msgs.splice(i, 1); }
+  save(); render();
+});
+$('hours').addEventListener('change', e => { const p = cur(), el = e.target;
+  if (el.dataset.ch !== undefined) { if (el.value === '') delete p.changes[el.dataset.ch]; else p.changes[el.dataset.ch] = +el.value; }
+  if (el.dataset.cm !== undefined) { if (el.value.trim() === '') delete p.comments[el.dataset.cm]; else p.comments[el.dataset.cm] = el.value.trim(); }
+  save(); render(); });
+$('v-setup').addEventListener('change', e => { const p = cur(), el = e.target;
+  if (el.dataset.k) p[el.dataset.k] = el.value; else if (el.dataset.pl !== undefined) p.plants[el.dataset.pl] = el.value.trim() || ('P' + (+el.dataset.pl + 1)); else return;
+  save(); render(); });
+document.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.tagName === 'INPUT') e.target.blur(); });
+$('bNew').onclick = () => { if (!confirm('Start a new pour? The current one stays in Saved pours.')) return; const p = newPour(); S.pours[p.id] = p; S.cur = p.id; save(); render(); toast('New pour started'); };
+$('pours').addEventListener('click', e => { const id = e.target.dataset.open; if (!id) return; S.cur = id; save(false); render(); toast('Pour opened'); });
+$('bDel').onclick = () => { if (!confirm('Delete this pour from all devices? This cannot be undone.')) return; const p = cur(); p.deleted = true; p.msgs = []; p.at = Date.now(); p.dirty = true;
+  const rest = Object.values(S.pours).filter(x => !x.deleted).sort((a, b) => b.at - a.at)[0] || newPour(); S.pours[rest.id] = rest; S.cur = rest.id; save(false); queueSync(); render(); };
+$('bZoom').onclick = () => $('picwrap').classList.toggle('zoom');
+$('bShare').onclick = () => $('pic').toBlob(async blob => {
+  const name = (cur().title || 'Pouring Report').replace(/[\\/:*?"<>|]/g, '-') + '.png', file = new File([blob], name, {type:'image/png'});
+  try {
+    if (navigator.canShare && navigator.canShare({files:[file]})) { await navigator.share({files:[file]}); return; }
+    if (navigator.clipboard && window.ClipboardItem) { await navigator.clipboard.write([new ClipboardItem({'image/png': blob})]); toast('Picture copied — paste it in WhatsApp (Ctrl+V)'); return; }
+  } catch (err) { if (err && err.name === 'AbortError') return; }
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click(); toast('Picture downloaded');
+}, 'image/png');
+
+$('bXls').onclick = async () => {
+  try {
+    if (!window.XLSX) await new Promise((ok, no) => { const s = document.createElement('script'); s.src = 'xlsx.full.min.js'; s.onload = ok; s.onerror = no; document.head.appendChild(s); });
+    const p = cur(), r1 = v => v === null || v === '' ? '' : Math.round(v * 10) / 10;
+    const A = [[p.title || 'Pouring Report'], ['Date', p.date], ['Total quantity Q (m³)', p.q === '' ? '' : M.q], ['Requested rate (m³/h)', M.reqNow], ['Actual avg rate (m³/h)', r1(M.avg)],
+      ['Loaded (m³)', r1(M.loaded)], ['Rejected (m³)', r1(M.rejected)], ['Remaining (m³)', r1(M.remaining)], ['Progress', M.progress === null ? '' : Math.round(M.progress * 100) + '%'], ['Expected finish', M.finish], ['Trucks', M.trucks], [],
+      ['TIME', ...p.plants, 'RATE m³/h', 'REQUESTED m³/h', 'TRUCKS', 'COMMENTS']];
+    M.hours.forEach(h => A.push([h.label, ...h.plants.map(v => v || ''), h.rate, h.req, h.trucks, h.comment || (h.auto !== null ? 'Client asked for ' + h.auto + ' m³/h.' : '')]));
+    if (M.hours.length) A.push(['TOTAL', ...M.totals, r1(M.loaded), '', M.trucks, '']);
+    const B = [['S/N', 'TIME', 'PLANT', 'QTY m³', 'REJECTED m³', 'CHECK', 'MESSAGE']];
+    M.rows.forEach(r => B.push([r.n || '', r.t === undefined ? '' : hhmm(r.t), r.plant === null ? '' : p.plants[r.plant], r.qty === null ? '' : r.qty, r.rejQty || '', r.flag, r.text]));
+    const wb = XLSX.utils.book_new(), s1 = XLSX.utils.aoa_to_sheet(A), s2 = XLSX.utils.aoa_to_sheet(B);
+    s1['!cols'] = [{wch:24}, {wch:9}, {wch:9}, {wch:9}, {wch:9}, {wch:9}, {wch:11}, {wch:16}, {wch:9}, {wch:46}];
+    s2['!cols'] = [{wch:6}, {wch:8}, {wch:8}, {wch:8}, {wch:13}, {wch:26}, {wch:70}];
+    XLSX.utils.book_append_sheet(wb, s1, 'Log'); XLSX.utils.book_append_sheet(wb, s2, 'Messages');
+    XLSX.writeFile(wb, (p.title || 'Pouring Report').replace(/[\\/:*?"<>|]/g, '-') + ' Report ' + (p.date || '').split('-').reverse().join('-') + '.xlsx');
+    toast('Excel file downloaded');
+  } catch (err) { console.warn(err); toast('Could not make the Excel file'); }
+};
+
+/* ====== sync (optional): Apps Script store, data encrypted on the device ====== */
+const b64 = u8 => { let s = ''; u8.forEach(c => s += String.fromCharCode(c)); return btoa(s); };
+const u8 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+async function deriveKey(pwd){
+  const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(pwd), 'PBKDF2', false, ['deriveBits']);
+  const bits = new Uint8Array(await crypto.subtle.deriveBits({name:'PBKDF2', hash:'SHA-256', salt:new TextEncoder().encode('pouring-report-v1'), iterations:150000}, base, 384));
+  return {store: Array.from(bits.slice(0, 16)).map(x => x.toString(16).padStart(2,'0')).join(''), aes: b64(bits.slice(16))};
+}
+async function aesKey(){ return crypto.subtle.importKey('raw', u8(S.key.aes), 'AES-GCM', false, ['encrypt','decrypt']); }
+async function pack(obj){
+  let data = new TextEncoder().encode(JSON.stringify(obj)), z = 0;
+  if (window.CompressionStream) { data = new Uint8Array(await new Response(new Blob([data]).stream().pipeThrough(new CompressionStream('gzip'))).arrayBuffer()); z = 1; }
+  const iv = crypto.getRandomValues(new Uint8Array(12)), ct = new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM', iv}, await aesKey(), data));
+  return z + '.' + b64(iv) + '.' + b64(ct);
+}
+async function unpack(s){
+  const a = s.split('.'); let data = new Uint8Array(await crypto.subtle.decrypt({name:'AES-GCM', iv:u8(a[1])}, await aesKey(), u8(a[2])));
+  if (a[0] === '1') data = new Uint8Array(await new Response(new Blob([data]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer());
+  return JSON.parse(new TextDecoder().decode(data));
+}
+async function api(body){
+  const r = await fetch(SYNC_URL, {method:'POST', body: JSON.stringify(Object.assign({k:S.key.store}, body))});
+  return r.json();
+}
+function merge(a, b){                       // a = local, b = remote
+  const nw = a.at >= b.at ? a : b, od = nw === a ? b : a, o = Object.assign({}, od, nw);
+  if (a.deleted || b.deleted) { o.deleted = true; o.msgs = []; return o; }
+  o.del = Array.from(new Set([...(a.del || []), ...(b.del || [])]));
+  const seen = new Set(); o.msgs = [];
+  [...nw.msgs, ...od.msgs].forEach(m => { const t = cleanLine(m.t); if (seen.has(t) || o.del.includes(t)) return; seen.add(t); o.msgs.push(m); });
+  if (od.msgs.some(m => !nw.msgs.some(x => cleanLine(x.t) === cleanLine(m.t)))) {       // keep time order when both sides added trucks
+    const key = m => { const q = parseMsg(cleanLine(m.t)); return q.serial === null ? 1e9 : q.serial; }; o.msgs = o.msgs.map((m, i) => [m, i]).sort((x, y) => key(x[0]) - key(y[0]) || x[1] - y[1]).map(x => x[0]); }
+  o.changes = Object.assign({}, od.changes, nw.changes); o.comments = Object.assign({}, od.comments, nw.comments);
+  return o;
+}
+let syncing = false, syncAgain = false, syncState = 'local', syncT = null;
+function queueSync(){ clearTimeout(syncT); syncT = setTimeout(syncAll, 1200); }
+async function syncAll(){
+  if (!SYNC_URL || !S.key) { syncState = 'local'; renderSync(); return; }
+  if (syncing) { syncAgain = true; return; }
+  syncing = true; syncState = 'syncing'; renderSync();
+  try {
+    const L = await api({op:'list'}); if (!L.ok) throw new Error(L.err || 'list');
+    let changed = false, arrived = null;
+    const born = id => parseInt(id.slice(0, -4), 36) || 0, blank = p => !p.rev && !p.title && !p.msgs.length && p.q === '';
+    for (const id of Object.keys(L.idx)) {
+      const loc = S.pours[id];
+      if (loc && loc.rev >= L.idx[id].rev) continue;
+      const G = await api({op:'get', id}); if (!G.ok || !G.found) continue;
+      const rem = await unpack(G.data);
+      if (!loc && !rem.deleted && (!arrived || born(id) > born(arrived))) arrived = id;
+      if (loc && loc.dirty) { S.pours[id] = Object.assign(merge(loc, rem), {rev:G.rev, dirty:true, at:Date.now()}); }
+      else { S.pours[id] = Object.assign(rem, {rev:G.rev, dirty:false}); }
+      changed = true;
+    }
+    // a pour started on another device opens here too (and replaces an untouched empty one)
+    if (arrived && (blank(cur()) || born(arrived) > born(S.cur))) { if (blank(cur())) delete S.pours[S.cur]; S.cur = arrived; }
+    for (const p of Object.values(S.pours)) {
+      if (!p.dirty) continue;
+      if (blank(p) && !p.deleted) continue;                                                 // untouched empty pour stays local
+      for (let tries = 0; tries < 3 && p.dirty; tries++) {
+        const sentAt = p.at, doc = Object.assign({}, p); delete doc.dirty; delete doc.rev;
+        const R = await api({op:'put', id:p.id, base:p.rev, data: await pack(doc)});
+        if (R.ok) { p.rev = R.rev; if (p.at === sentAt) p.dirty = false; }
+        else if (R.conflict) { const rem = R.data ? await unpack(R.data) : null; if (rem) Object.assign(p, merge(p, rem)); p.rev = R.rev; p.dirty = true; changed = true; }
+        else throw new Error(R.err || 'put');
+      }
+    }
+    Object.values(S.pours).forEach(p => { if (p.deleted && !p.dirty && p.id !== S.cur) delete S.pours[p.id]; });
+    if (!S.pours[S.cur] || S.pours[S.cur].deleted) { const rest = Object.values(S.pours).filter(x => !x.deleted).sort((a, b) => b.at - a.at)[0] || newPour(); S.pours[rest.id] = rest; S.cur = rest.id; changed = true; }
+    save(false); syncState = 'ok'; S.lastSync = Date.now();
+    if (changed && !['INPUT','TEXTAREA'].includes(document.activeElement.tagName)) render();
+  } catch (err) { syncState = navigator.onLine ? 'error' : 'offline'; console.warn('sync', err); }
+  syncing = false; renderSync();
+  if (syncAgain) { syncAgain = false; queueSync(); }
+}
+function renderSync(){
+  const txt = {local:'on this device only', syncing:'syncing…', ok:'synced ✓', error:'sync error', offline:'offline'}[syncState];
+  $('sync').textContent = txt; $('sync').style.background = syncState === 'ok' ? 'rgba(80,200,120,.35)' : syncState === 'error' ? 'rgba(255,90,90,.45)' : 'rgba(255,255,255,.18)';
+  $('syncInfo').textContent = !SYNC_URL ? 'Sync is not set up in this build yet — pours are saved on this device only.' : !S.key ? 'Type the sync password to share pours between your phone and laptop. The first device chooses it; type the same one on the others.' : 'Sync is on. Status: ' + txt + '.';
+}
+$('bPwd').onclick = async () => { const v = $('sPwd').value; if (v.length < 4) { toast('Password must be at least 4 characters'); return; } if (!SYNC_URL) { toast('Sync is not set up in this build yet'); return; }
+  S.key = await deriveKey(v); $('sPwd').value = ''; Object.values(S.pours).forEach(p => { p.rev = 0; p.dirty = true; }); save(false); toast('Password saved — syncing'); syncAll(); };
+$('bSync').onclick = () => { if (!S.key) { toast('Save the sync password first'); return; } syncAll(); };
+$('bOff').onclick = () => { if (!S.key || !confirm('Turn sync off on this device? The pours stay here.')) return; S.key = null; save(false); syncState = 'local'; renderSync(); };
+document.addEventListener('visibilitychange', () => { if (!document.hidden) syncAll(); });
+setInterval(() => { if (!document.hidden) syncAll(); }, 20000);
+
+render(); syncAll();
+if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
+</script>
+</body>
+</html>
