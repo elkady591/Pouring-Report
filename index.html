@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#1F3864">
-<meta name="app-build" content="20261014-2">
+<meta name="app-build" content="20261014-3">
 <title>Pouring Report</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png?v=3">
@@ -243,6 +243,7 @@ function finishText(p, M){
 /* ====== picture (canvas) ====== */
 const C = {navy:'#1F3864', grey:'#595959', line:'#BFBFBF', tile:'#F3F6FA', green:'#00863D', red:'#C00000', gF:'#C6EFCE', gT:'#006100', rF:'#FFC7CE', rT:'#9C0006', pF:'#EDEDED',
            barG:'#005A00', barR:'#C00000', barP:'#A6A6A6', time:'#F2F2F2', tot:'#DDE3EE', yellow:'#FFFF00'};
+let XSTYLE = 'A';                                     // crowded charts: every time label, slanted (user's pick 14-Oct-2026)
 let PSTYLE = 'D';                                     // progress tile look in the picture: D = 20 blocks (user's pick 14-Oct-2026)
 const FONT = '"Segoe UI",Roboto,Arial,sans-serif';
 function draw(p, M){
@@ -295,15 +296,25 @@ function draw(p, M){
   // chart
   const CY = 222, CH = 192; rr(X0 + .5, CY + .5, CW - 1, CH - 1, 9, '#fff', C.line);
   if (nRows) {
-    const padL = 34, padR = 20, top = CY + 30, base = CY + CH - 30, slot = (CW - padL - padR) / nRows, bw = Math.min(150, slot * .68);
+    const padL = 34, padR = 20, slot = (CW - padL - padR) / nRows, step = Math.max(1, Math.ceil(46 / slot)), crowded = step > 1;
+    const room = !crowded || XSTYLE === 'now' || XSTYLE === 'C' ? 30 : XSTYLE === 'D' ? 40 : 46;   // space under the bars for the times
+    const top = CY + 30, base = CY + CH - room, bw = Math.min(150, slot * .68);
     const max = Math.max(1, ...M.hours.map(h => Math.max(h.rate, h.req))) * 1.05, yOf = v => base - (base - top) * v / max;
-    const step = Math.max(1, Math.ceil(46 / slot)), vs = slot < 30 ? 10 : 12;      // crowded pours: time under every 2nd/3rd bar, smaller values
+    const vs = slot < 30 ? 10 : 12;
+    const lbl = (s, cx, i) => {                     // time under a bar; crowded pours need a different layout
+      const o = {size:11.5, bold:false, color:'#222', align:'center'};
+      if (!crowded) return text(s, cx, base + 15, o);
+      if (XSTYLE === 'now') { if ((nRows - 1 - i) % step === 0) text(s, cx, base + 15, o); return; }
+      if (XSTYLE === 'A' || XSTYLE === 'B') { g.save(); g.translate(cx + 4, base + 7); g.rotate(XSTYLE === 'A' ? -Math.PI / 4 : -Math.PI / 2); text(s, 0, 0, Object.assign(o, {size:10.5, align:'right'})); g.restore(); return; }
+      if (XSTYLE === 'C') return text(s, cx, base + 14, Object.assign(o, {size: Math.min(10, slot / 3.1)}));
+      if (XSTYLE === 'D') { if (i % 2) { g.strokeStyle = '#c8c8c8'; g.lineWidth = 1; g.beginPath(); g.moveTo(cx + .5, base + 2); g.lineTo(cx + .5, base + 18); g.stroke(); } return text(s, cx, base + (i % 2 ? 27 : 13), Object.assign(o, {size:10.5})); }
+    };
     g.strokeStyle = '#8c8c8c'; g.lineWidth = 1; g.beginPath(); g.moveTo(X0 + padL - 14, base + .5); g.lineTo(X0 + CW - padR + 14, base + .5); g.stroke();
     M.hours.forEach((h, i) => { const cx = X0 + padL + slot * (i + .5);
       const bx = cx - bw/2, by = yOf(h.rate), bh = base - by, br = Math.min(7, bh);      // bars with rounded tops
       g.fillStyle = h.state === 'g' ? C.barG : h.state === 'r' ? C.barR : C.barP;
       if (bh > 0) { g.beginPath(); g.moveTo(bx, base); g.lineTo(bx, by + br); g.arcTo(bx, by, bx + br, by, br); g.lineTo(bx + bw - br, by); g.arcTo(bx + bw, by, bx + bw, by + br, br); g.lineTo(bx + bw, base); g.closePath(); g.fill(); }
-      if ((nRows - 1 - i) % step === 0) text(h.end, cx, base + 15, {size:11.5, bold:false, color:'#222', align:'center'}); });
+      lbl(h.end, cx, i); });
     g.strokeStyle = C.navy; g.lineWidth = 2.5; g.setLineDash([9,6]); g.beginPath();
     M.hours.forEach((h, i) => { const x1 = X0 + padL + slot * i + (i ? 0 : slot * .12), x2 = X0 + padL + slot * (i + 1) - (i === nRows - 1 ? slot * .12 : 0), y = yOf(h.req); if (i) g.lineTo(x1, y); else g.moveTo(x1, y); g.lineTo(x2, y); });
     g.stroke(); g.setLineDash([]);
