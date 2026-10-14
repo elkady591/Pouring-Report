@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#1F3864">
-<meta name="app-build" content="20261014-1">
+<meta name="app-build" content="20261014-2">
 <title>Pouring Report</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png?v=3">
@@ -209,7 +209,7 @@ function compute(p){
     let req = +p.req || 0;
     for (let i = 0; i < nH; i++) {
       const lab = start + 60*i, from = i === 0 ? Math.min(start, first) : lab, to = lab + 60, key = String(lab);
-      const h = {key, label: hhmm(lab) + ' – ' + hhmm(to), short: hhmm(lab), plants:[0,0,0,0,0], rate:0, trucks:0, last: i === nH - 1};
+      const h = {key, label: hhmm(lab) + ' – ' + hhmm(to), short: hhmm(lab), end: hhmm(to), plants:[0,0,0,0,0], rate:0, trucks:0, last: i === nH - 1};
       timed.forEach(r => { if (r.t >= from && r.t < to) { h.rate += r.qty || 0; h.trucks++; if (r.plant !== null) h.plants[r.plant] += r.qty || 0; } });
       const ch = p.changes[key];
       h.changed = ch !== undefined && ch !== '' && +ch !== req;
@@ -297,17 +297,18 @@ function draw(p, M){
   if (nRows) {
     const padL = 34, padR = 20, top = CY + 30, base = CY + CH - 30, slot = (CW - padL - padR) / nRows, bw = Math.min(150, slot * .68);
     const max = Math.max(1, ...M.hours.map(h => Math.max(h.rate, h.req))) * 1.05, yOf = v => base - (base - top) * v / max;
+    const step = Math.max(1, Math.ceil(46 / slot)), vs = slot < 30 ? 10 : 12;      // crowded pours: time under every 2nd/3rd bar, smaller values
     g.strokeStyle = '#8c8c8c'; g.lineWidth = 1; g.beginPath(); g.moveTo(X0 + padL - 14, base + .5); g.lineTo(X0 + CW - padR + 14, base + .5); g.stroke();
     M.hours.forEach((h, i) => { const cx = X0 + padL + slot * (i + .5);
       const bx = cx - bw/2, by = yOf(h.rate), bh = base - by, br = Math.min(7, bh);      // bars with rounded tops
       g.fillStyle = h.state === 'g' ? C.barG : h.state === 'r' ? C.barR : C.barP;
       if (bh > 0) { g.beginPath(); g.moveTo(bx, base); g.lineTo(bx, by + br); g.arcTo(bx, by, bx + br, by, br); g.lineTo(bx + bw - br, by); g.arcTo(bx + bw, by, bx + bw, by + br, br); g.lineTo(bx + bw, base); g.closePath(); g.fill(); }
-      text(h.short, cx, base + 15, {size:11.5, bold:false, color:'#222', align:'center'}); });
+      if ((nRows - 1 - i) % step === 0) text(h.end, cx, base + 15, {size:11.5, bold:false, color:'#222', align:'center'}); });
     g.strokeStyle = C.navy; g.lineWidth = 2.5; g.setLineDash([9,6]); g.beginPath();
     M.hours.forEach((h, i) => { const x1 = X0 + padL + slot * i + (i ? 0 : slot * .12), x2 = X0 + padL + slot * (i + 1) - (i === nRows - 1 ? slot * .12 : 0), y = yOf(h.req); if (i) g.lineTo(x1, y); else g.moveTo(x1, y); g.lineTo(x2, y); });
     g.stroke(); g.setLineDash([]);
     M.hours.forEach((h, i) => { const cx = X0 + padL + slot * (i + .5); let y = yOf(h.rate) - 10; if (Math.abs(y - yOf(h.req)) < 9) y = yOf(Math.max(h.rate, h.req)) - 13;
-      const w = g.measureText(fmt(h.rate)).width; rr(cx - w/2 - 5, y - 8, w + 10, 16, 5, 'rgba(255,255,255,.85)'); text(fmt(h.rate), cx, y, {size:12, bold:false, color:'#111', align:'center'}); });
+      const w = g.measureText(fmt(h.rate)).width; rr(cx - w/2 - 5, y - 8, w + 10, 16, 5, 'rgba(255,255,255,.85)'); text(fmt(h.rate), cx, y, {size:vs, bold:false, color:'#111', align:'center'}); });
   }
 
   // table
