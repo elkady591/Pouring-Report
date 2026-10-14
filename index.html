@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#1F3864">
-<meta name="app-build" content="20261014-8">
+<meta name="app-build" content="20261014-9">
 <title>Pouring Report</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png?v=3">
@@ -482,6 +482,17 @@ $('bXls').onclick = async () => {
       sheetPath[s.getAttribute('name')] = 'xl/' + rel.getAttribute('Target').replace(/^\/?xl\//, '');
     });
     const calc = wbx.getElementsByTagNameNS(NS, 'calcPr')[0]; calc.setAttribute('fullCalcOnLoad', '1'); store('xl/workbook.xml', wbx);   // Excel recalculates on opening
+    // the calculation chain lists formula cells; once a comment overwrites a formula cell it no longer
+    // matches and Excel refuses the file, so drop it (Excel rebuilds it by itself)
+    if (part('xl/calcChain.xml')) {
+      XLSX.CFB.utils.cfb_del(zip, '/xl/calcChain.xml');
+      const rl = load('xl/_rels/workbook.xml.rels');
+      Array.from(rl.getElementsByTagName('Relationship')).filter(r => /calcChain$/.test(r.getAttribute('Type'))).forEach(r => r.parentNode.removeChild(r));
+      store('xl/_rels/workbook.xml.rels', rl);
+      const ct = load('[Content_Types].xml');
+      Array.from(ct.getElementsByTagName('Override')).filter(o => o.getAttribute('PartName') === '/xl/calcChain.xml').forEach(o => o.parentNode.removeChild(o));
+      store('[Content_Types].xml', ct);
+    }
 
     const L = sheet(sheetPath.Log), G = sheet(sheetPath.Messages);
     const serial = d => (Date.UTC(+d.slice(0, 4), +d.slice(5, 7) - 1, +d.slice(8, 10)) - Date.UTC(1899, 11, 30)) / 864e5;
