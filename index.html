@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#1F3864">
-<meta name="app-build" content="20261014-3">
+<meta name="app-build" content="20261014-4">
 <title>Pouring Report</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png?v=3">
@@ -430,20 +430,69 @@ $('bShare').onclick = () => $('pic').toBlob(async blob => {
 $('bXls').onclick = async () => {
   try {
     if (!window.XLSX) await new Promise((ok, no) => { const s = document.createElement('script'); s.src = 'xlsx.full.min.js'; s.onload = ok; s.onerror = no; document.head.appendChild(s); });
-    const p = cur(), r1 = v => v === null || v === '' ? '' : Math.round(v * 10) / 10;
-    const A = [[p.title || 'Pouring Report'], ['Date', p.date], ['Total quantity Q (m³)', p.q === '' ? '' : M.q], ['Requested rate (m³/h)', M.reqNow], ['Actual avg rate (m³/h)', r1(M.avg)],
-      ['Loaded (m³)', r1(M.loaded)], ['Rejected (m³)', r1(M.rejected)], ['Remaining (m³)', r1(M.remaining)], ['Progress', M.progress === null ? '' : Math.round(M.progress * 100) + '%'], ['Expected finish', M.finish], ['Trucks', M.trucks], [],
-      ['TIME', ...p.plants, 'RATE m³/h', 'REQUESTED m³/h', 'TRUCKS', 'COMMENTS']];
-    M.hours.forEach(h => A.push([h.label, ...h.plants.map(v => v || ''), h.rate, h.req, h.trucks, h.comment || (h.auto !== null ? 'Client asked for ' + h.auto + ' m³/h.' : '')]));
-    if (M.hours.length) A.push(['TOTAL', ...M.totals, r1(M.loaded), '', M.trucks, '']);
-    const B = [['S/N', 'TIME', 'PLANT', 'QTY m³', 'REJECTED m³', 'CHECK', 'MESSAGE']];
-    M.rows.forEach(r => B.push([r.n || '', r.t === undefined ? '' : hhmm(r.t), r.plant === null ? '' : p.plants[r.plant], r.qty === null ? '' : r.qty, r.rejQty || '', r.flag, r.text]));
-    const wb = XLSX.utils.book_new(), s1 = XLSX.utils.aoa_to_sheet(A), s2 = XLSX.utils.aoa_to_sheet(B);
-    s1['!cols'] = [{wch:24}, {wch:9}, {wch:9}, {wch:9}, {wch:9}, {wch:9}, {wch:11}, {wch:16}, {wch:9}, {wch:46}];
-    s2['!cols'] = [{wch:6}, {wch:8}, {wch:8}, {wch:8}, {wch:13}, {wch:26}, {wch:70}];
-    XLSX.utils.book_append_sheet(wb, s1, 'Log'); XLSX.utils.book_append_sheet(wb, s2, 'Messages');
-    XLSX.writeFile(wb, (p.title || 'Pouring Report').replace(/[\\/:*?"<>|]/g, '-') + ' Report ' + (p.date || '').split('-').reverse().join('-') + '.xlsx');
-    toast('Excel file downloaded');
+    // The download is the user's own Excel sheet (template.xlsm = an empty copy of Pouring Report.xlsm):
+    // only the input cells are written, so every format, the chart, the shapes and the macros stay as they are.
+    const p = cur();
+    const zip = XLSX.CFB.read(new Uint8Array(await (await fetch('template.xlsm', {cache:'no-cache'})).arrayBuffer()), {type:'array'});
+    const part = path => XLSX.CFB.find(zip, '/' + path);
+    const NS = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+    const load = path => new DOMParser().parseFromString(new TextDecoder().decode(part(path).content), 'application/xml');
+    const store = (path, doc) => { part(path).content = new TextEncoder().encode(new XMLSerializer().serializeToString(doc)); };
+    const colNo = ref => ref.replace(/\d+/g, '').split('').reduce((a, ch) => a * 26 + ch.charCodeAt(0) - 64, 0);
+    function sheet(path) {
+      const doc = load(path), data = doc.getElementsByTagNameNS(NS, 'sheetData')[0], rows = {};
+      Array.from(data.getElementsByTagNameNS(NS, 'row')).forEach(r => rows[r.getAttribute('r')] = r);
+      const cellOf = ref => {                       // existing cell, or a new one in the right place
+        const rn = ref.replace(/[A-Z]+/g, '');
+        let row = rows[rn];
+        if (!row) { row = doc.createElementNS(NS, 'row'); row.setAttribute('r', rn); rows[rn] = row;
+          const after = Array.from(data.getElementsByTagNameNS(NS, 'row')).find(x => +x.getAttribute('r') > +rn); data.insertBefore(row, after || null); }
+        const cells = Array.from(row.getElementsByTagNameNS(NS, 'c'));
+        let c = cells.find(x => x.getAttribute('r') === ref);
+        if (!c) { c = doc.createElementNS(NS, 'c'); c.setAttribute('r', ref); row.insertBefore(c, cells.find(x => colNo(x.getAttribute('r')) > colNo(ref)) || null); }
+        while (c.firstChild) c.removeChild(c.firstChild);
+        c.removeAttribute('t');
+        return c;
+      };
+      const el = (name, text) => { const e = doc.createElementNS(NS, name); if (text !== undefined) e.textContent = text; return e; };
+      return {
+        doc,
+        num(ref, v) { if (v === '' || v === null || v === undefined || isNaN(v)) return; cellOf(ref).appendChild(el('v', String(v))); },
+        str(ref, s) { if (s === '' || s === null || s === undefined) return; const c = cellOf(ref); c.setAttribute('t', 'inlineStr');
+          const is = el('is'), t = el('t', String(s)); t.setAttributeNS('http://www.w3.org/XML/1998/namespace', 'xml:space', 'preserve'); is.appendChild(t); c.appendChild(is); },
+        rich(ref, runs) { const c = cellOf(ref); c.setAttribute('t', 'inlineStr'); const is = el('is');
+          runs.forEach(([text, color]) => { const r = el('r'), pr = el('rPr'); const f = el('rFont'); f.setAttribute('val', 'ADLaM Display');
+            const sz = el('sz'); sz.setAttribute('val', '10'); const co = el('color'); co.setAttribute('rgb', color); pr.appendChild(f); pr.appendChild(sz); pr.appendChild(co);
+            const t = el('t', text); t.setAttributeNS('http://www.w3.org/XML/1998/namespace', 'xml:space', 'preserve'); r.appendChild(pr); r.appendChild(t); is.appendChild(r); });
+          c.appendChild(is); }
+      };
+    }
+    const wbx = load('xl/workbook.xml'), rels = load('xl/_rels/workbook.xml.rels'), sheetPath = {};
+    Array.from(wbx.getElementsByTagNameNS(NS, 'sheet')).forEach(s => {
+      const id = s.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships', 'id');
+      const rel = Array.from(rels.getElementsByTagName('Relationship')).find(r => r.getAttribute('Id') === id);
+      sheetPath[s.getAttribute('name')] = 'xl/' + rel.getAttribute('Target').replace(/^\/?xl\//, '');
+    });
+    const calc = wbx.getElementsByTagNameNS(NS, 'calcPr')[0]; calc.setAttribute('fullCalcOnLoad', '1'); store('xl/workbook.xml', wbx);   // Excel recalculates on opening
+
+    const L = sheet(sheetPath.Log), G = sheet(sheetPath.Messages);
+    const serial = d => (Date.UTC(+d.slice(0, 4), +d.slice(5, 7) - 1, +d.slice(8, 10)) - Date.UTC(1899, 11, 30)) / 864e5;
+    L.str('P9', p.title); if (p.date) L.num('P10', serial(p.date)); L.num('P11', p.q === '' ? '' : +p.q); L.num('P12', p.req === '' ? '' : +p.req);
+    if (p.start) { const a = p.start.split(':'); L.num('P13', (+a[0] * 60 + +a[1]) / 1440); }
+    L.num('P14', p.rejManual === '' ? '' : +p.rejManual);
+    p.plants.forEach((name, i) => L.str('CDEFG'[i] + '19', name));
+    M.hours.forEach((h, i) => { const r = 20 + i, ch = p.changes[h.key];
+      if (ch !== undefined && ch !== '') L.num('O' + r, +ch);
+      if (h.comment) L.str('J' + r, h.comment);
+      else if (h.auto !== null) L.rich('J' + r, [['Client asked for ', 'FF000000'], [String(h.auto), 'FFFF0000'], [' m³/h.', 'FF000000']]); });
+    p.msgs.slice(0, 1000).forEach((m, i) => { G.str('B' + (2 + i), m.t); if (m.r) typeof m.r === 'number' ? G.num('F' + (2 + i), m.r) : G.str('F' + (2 + i), 'x'); });
+    store(sheetPath.Log, L.doc); store(sheetPath.Messages, G.doc);
+
+    const out = XLSX.CFB.write(zip, {fileType:'zip', type:'array', compression:true});
+    const blob = new Blob([out], {type:'application/vnd.ms-excel.sheet.macroEnabled.12'}), a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = (p.title || 'Pouring Report').replace(/[\\/:*?"<>|]/g, '-') + ' Report ' + (p.date || '').split('-').reverse().join('-') + '.xlsm';
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 20000);
+    toast('Excel file downloaded — open it and press Enable Editing / Enable Content');
   } catch (err) { console.warn(err); toast('Could not make the Excel file'); }
 };
 
