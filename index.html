@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#1F3864">
-<meta name="app-build" content="20261014-9">
+<meta name="app-build" content="20261014-10">
 <title>Pouring Report</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png?v=3">
@@ -103,7 +103,14 @@ textarea{min-height:120px;resize:vertical;direction:ltr}
     </div>
     <button class="big alt" id="bXls">Download this pour as Excel</button>
     <button class="big alt" id="bNew">New pour</button>
-    <div class="card"><h2>Saved pours</h2><div id="pours"></div></div>
+    <div class="card"><h2>Saved pours</h2>
+      <div class="filters">
+        <input id="fName" type="search" placeholder="Search by name…" autocomplete="off">
+        <div class="row2"><div><label>From date</label><input id="fFrom" type="date"></div><div><label>To date</label><input id="fTo" type="date"></div></div>
+        <button class="sm" id="fClear" style="margin-top:8px">Clear filter</button>
+      </div>
+      <div class="muted" id="fCount" style="margin:8px 0 2px"></div>
+      <div id="pours"></div></div>
     <div class="card"><h2>Sync between phone and laptop</h2>
       <div class="muted" id="syncInfo"></div>
       <label>Sync password</label><input id="sPwd" type="password" autocomplete="off" placeholder="Same password on every device">
@@ -378,8 +385,11 @@ function renderSetup(){
   document.querySelectorAll('#v-setup [data-k]').forEach(el => { if (document.activeElement !== el) el.value = p[el.dataset.k]; });
   if (!$('plants').children.length) $('plants').innerHTML = [0,1,2,3,4].map(i => `<input data-pl="${i}">`).join('');
   document.querySelectorAll('[data-pl]').forEach(el => { if (document.activeElement !== el) el.value = p.plants[el.dataset.pl]; });
-  const list = Object.values(S.pours).filter(x => !x.deleted).sort((a, b) => (b.date || '').localeCompare(a.date || '') || b.at - a.at);
-  $('pours').innerHTML = list.map(x => { const m = x.id === p.id ? M : compute(x); return `<div class="pour"><div><b>${esc(x.title || 'Untitled pour')}</b><small>${esc(x.date || '')} · ${fmt(m.loaded)} m³${x.q !== '' ? ' of ' + fmt(+x.q) : ''}</small></div>${x.id === p.id ? '<span class="muted">open</span>' : `<button class="sm" data-open="${x.id}">Open</button>`}</div>`; }).join('');
+  const all = Object.values(S.pours).filter(x => !x.deleted).sort((a, b) => (b.date || '').localeCompare(a.date || '') || b.at - a.at);
+  const q = $('fName').value.trim().toLowerCase(), from = $('fFrom').value, to = $('fTo').value;
+  const list = all.filter(x => (!q || (x.title || 'untitled pour').toLowerCase().includes(q)) && (!from || (x.date || '') >= from) && (!to || (x.date || '') <= to));
+  $('fCount').textContent = q || from || to ? `${list.length} of ${all.length} pours` : `${all.length} pours`;
+  $('pours').innerHTML = list.map(x => { const m = x.id === p.id ? M : compute(x); return `<div class="pour"><div><b>${esc(x.title || 'Untitled pour')}</b><small>${esc(x.date || '')} · ${fmt(m.loaded)} m³${x.q !== '' ? ' of ' + fmt(+x.q) : ''}</small></div>${x.id === p.id ? '<span class="muted">open</span>' : `<button class="sm" data-open="${x.id}">Open</button>`}<button class="sm" data-delpour="${x.id}" style="color:#C00000">Delete</button></div>`; }).join('') || '<div class="muted">No pours match the filter.</div>';
   $('build').textContent = document.querySelector('meta[name=app-build]').content;
 }
 
@@ -414,9 +424,24 @@ $('v-setup').addEventListener('change', e => { const p = cur(), el = e.target;
   save(); render(); });
 document.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.tagName === 'INPUT') e.target.blur(); });
 $('bNew').onclick = () => { if (!confirm('Start a new pour? The current one stays in Saved pours.')) return; const p = newPour(); S.pours[p.id] = p; S.cur = p.id; save(); render(); toast('New pour started'); };
-$('pours').addEventListener('click', e => { const id = e.target.dataset.open; if (!id) return; S.cur = id; save(false); render(); toast('Pour opened'); });
-$('bDel').onclick = () => { if (!confirm('Delete this pour from all devices? This cannot be undone.')) return; const p = cur(); p.deleted = true; p.msgs = []; p.at = Date.now(); p.dirty = true;
-  const rest = Object.values(S.pours).filter(x => !x.deleted).sort((a, b) => b.at - a.at)[0] || newPour(); S.pours[rest.id] = rest; S.cur = rest.id; save(false); queueSync(); render(); };
+function deletePour(id) {                          // removed on every device through sync (kept as a deleted marker)
+  const p = S.pours[id]; if (!p) return;
+  if (!confirm(`Delete "${p.title || 'Untitled pour'}" (${p.date || 'no date'}) from all devices? This cannot be undone.`)) return;
+  p.deleted = true; p.msgs = []; p.at = Date.now(); p.dirty = true;
+  if (S.cur === id) { const rest = Object.values(S.pours).filter(x => !x.deleted).sort((a, b) => b.at - a.at)[0] || newPour(); S.pours[rest.id] = rest; S.cur = rest.id; }
+  save(false); queueSync(); render(); toast('Pour deleted');
+}
+$('pours').addEventListener('click', e => { const d = e.target.dataset;
+  if (d.delpour) return deletePour(d.delpour);
+  if (!d.open) return; S.cur = d.open; save(false); render(); toast('Pour opened'); });
+$('bDel').onclick = () => deletePour(S.cur);
+// filter: the date boxes open the calendar on any tap, no typing needed
+['fFrom', 'fTo'].forEach(id => { const el = $(id);
+  el.addEventListener('click', () => { try { el.showPicker(); } catch (err) {} });
+  el.addEventListener('keydown', e => { if (e.key !== 'Tab') e.preventDefault(); });
+  el.addEventListener('change', renderSetup); });
+$('fName').addEventListener('input', renderSetup);
+$('fClear').onclick = () => { $('fName').value = $('fFrom').value = $('fTo').value = ''; renderSetup(); };
 $('bZoom').onclick = () => $('picwrap').classList.toggle('zoom');
 $('bShare').onclick = () => $('pic').toBlob(async blob => {
   const name = (cur().title || 'Pouring Report').replace(/[\\/:*?"<>|]/g, '-') + '.png', file = new File([blob], name, {type:'image/png'});
