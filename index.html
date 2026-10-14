@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#1F3864">
-<meta name="app-build" content="20261014-6">
+<meta name="app-build" content="20261014-7">
 <title>Pouring Report</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png?v=3">
@@ -541,6 +541,26 @@ $('bXls').onclick = async () => {
         if (!ax.getElementsByTagNameNS(CNS, 'tickLblSkip').length) { const sk = CH.createElementNS(CNS, 'c:tickLblSkip'); sk.setAttribute('val', '1');
           const after = ax.getElementsByTagNameNS(CNS, 'lblOffset')[0]; ax.insertBefore(sk, after ? after.nextSibling : null); } }
       store(chartPath, CH);
+    }
+
+    // the report picture goes on the "Picture" sheet (the COPY PICTURE button on Log links there):
+    // replace the template's placeholder image and give it the picture's real size
+    const png = new Uint8Array(await (await new Promise(res => $('pic').toBlob(res, 'image/png'))).arrayBuffer());
+    const media = zip.FullPaths.find(x => /\/xl\/media\/image\d+\.png$/.test(x));
+    if (media) {
+      XLSX.CFB.find(zip, media).content = png;
+      const picPath = zip.FullPaths.map(x => x.replace(/^[^/]*\//, '')).find(x => /^xl\/drawings\/drawing\d+\.xml$/.test(x) && new TextDecoder().decode(part(x).content).includes(':pic>'));
+      if (picPath) {
+        const PD = load(picPath), pic = PD.getElementsByTagNameNS(XDR, 'pic')[0], old = pic.parentNode;
+        const cx = Math.round($('pic').width / 2 * 0.75 * EMU), cy = Math.round($('pic').height / 2 * 0.75 * EMU);
+        const one = PD.createElementNS(XDR, 'xdr:oneCellAnchor'), ext = PD.createElementNS(XDR, 'xdr:ext');
+        ext.setAttribute('cx', cx); ext.setAttribute('cy', cy);
+        one.appendChild(old.getElementsByTagNameNS(XDR, 'from')[0].cloneNode(true)); one.appendChild(ext); one.appendChild(pic);
+        one.appendChild(PD.createElementNS(XDR, 'xdr:clientData'));
+        old.parentNode.replaceChild(one, old);
+        const xe = pic.getElementsByTagNameNS(DA, 'ext')[0]; if (xe) { xe.setAttribute('cx', cx); xe.setAttribute('cy', cy); }
+        store(picPath, PD);
+      }
     }
 
     const out = XLSX.CFB.write(zip, {fileType:'zip', type:'array', compression:true});
