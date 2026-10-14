@@ -1,5 +1,5 @@
 // Pouring Report service worker: network first, cached copy when offline.
-const VERSION = 'pouring-report-v5';
+const VERSION = 'pouring-report-v6';
 const FILES = ['./', 'index.html', 'manifest.json', 'icon-192.png', 'icon-512.png', 'xlsx.full.min.js'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(VERSION).then(c => c.addAll(FILES)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => {
