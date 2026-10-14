@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#1F3864">
-<meta name="app-build" content="20261014-4">
+<meta name="app-build" content="20261014-5">
 <title>Pouring Report</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png?v=3">
@@ -430,10 +430,10 @@ $('bShare').onclick = () => $('pic').toBlob(async blob => {
 $('bXls').onclick = async () => {
   try {
     if (!window.XLSX) await new Promise((ok, no) => { const s = document.createElement('script'); s.src = 'xlsx.full.min.js'; s.onload = ok; s.onerror = no; document.head.appendChild(s); });
-    // The download is the user's own Excel sheet (template.xlsm = an empty copy of Pouring Report.xlsm):
+    // The download is the user's own Excel sheet (template.xlsx = an empty, macro-free copy of Pouring Report.xlsm):
     // only the input cells are written, so every format, the chart, the shapes and the macros stay as they are.
     const p = cur();
-    const zip = XLSX.CFB.read(new Uint8Array(await (await fetch('template.xlsm', {cache:'no-cache'})).arrayBuffer()), {type:'array'});
+    const zip = XLSX.CFB.read(new Uint8Array(await (await fetch('template.xlsx', {cache:'no-cache'})).arrayBuffer()), {type:'array'});
     const part = path => XLSX.CFB.find(zip, '/' + path);
     const NS = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
     const load = path => new DOMParser().parseFromString(new TextDecoder().decode(part(path).content), 'application/xml');
@@ -488,11 +488,58 @@ $('bXls').onclick = async () => {
     p.msgs.slice(0, 1000).forEach((m, i) => { G.str('B' + (2 + i), m.t); if (m.r) typeof m.r === 'number' ? G.num('F' + (2 + i), m.r) : G.str('F' + (2 + i), 'x'); });
     store(sheetPath.Log, L.doc); store(sheetPath.Messages, G.doc);
 
+    // The file has no macros (Windows blocks macros in downloaded files), so the shapes the Excel macro
+    // normally updates are set here: progress blocks, AVG / REJECTED colours, tile texts and the table frame.
+    const geo = await (await fetch('template-geo.json', {cache:'no-cache'})).json();
+    const XDR = 'http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing', DA = 'http://schemas.openxmlformats.org/drawingml/2006/main';
+    const drawPath = 'xl/drawings/drawing1.xml', D = load(drawPath), EMU = 12700;
+    const shape = name => { const nv = Array.from(D.getElementsByTagNameNS(XDR, 'cNvPr')).find(e => e.getAttribute('name') === name); if (!nv) return null;
+      let a = nv; while (a && a.localName !== 'twoCellAnchor') a = a.parentNode; return {anchor: a, sp: nv.parentNode.parentNode}; };
+    const fill = (name, hex) => { const s = shape(name); if (!s) return; const sf = Array.from(s.sp.childNodes).find(n => n.localName === 'spPr');
+      const clr = sf && sf.getElementsByTagNameNS(DA, 'srgbClr')[0]; if (clr) clr.setAttribute('val', hex); };
+    const textOf = (name, text, hex) => { const s = shape(name); if (!s) return; const body = Array.from(s.sp.childNodes).find(n => n.localName === 'txBody'); if (!body) return;
+      if (hex) Array.from(body.getElementsByTagNameNS(DA, 'srgbClr')).forEach(c => c.setAttribute('val', hex));
+      if (text !== undefined) { const t = body.getElementsByTagNameNS(DA, 't')[0]; if (t) t.textContent = text; } };
+    const place = (name, x1, y1, x2, y2) => { const s = shape(name); if (!s) return;
+      const at = (arr, v) => { let i = 0; while (i + 1 < arr.length && arr[i + 1] <= v + 1e-6) i++; return [i, Math.max(0, Math.round((v - arr[i]) * EMU))]; };
+      const set = (tag, x, y) => { const e = s.anchor.getElementsByTagNameNS(XDR, tag)[0], [c, co] = at(geo.colLeft, x), [r, ro] = at(geo.rowTop, y);
+        e.getElementsByTagNameNS(XDR, 'col')[0].textContent = c; e.getElementsByTagNameNS(XDR, 'colOff')[0].textContent = co;
+        e.getElementsByTagNameNS(XDR, 'row')[0].textContent = r; e.getElementsByTagNameNS(XDR, 'rowOff')[0].textContent = ro; };
+      set('from', x1, y1); set('to', x2, y2);
+      const xf = s.sp.getElementsByTagNameNS(DA, 'xfrm')[0];
+      if (xf) { const off = xf.getElementsByTagNameNS(DA, 'off')[0], ext = xf.getElementsByTagNameNS(DA, 'ext')[0];
+        off.setAttribute('x', Math.round(x1 * EMU)); off.setAttribute('y', Math.round(y1 * EMU)); ext.setAttribute('cx', Math.round((x2 - x1) * EMU)); ext.setAttribute('cy', Math.round((y2 - y1) * EMU)); }
+      return s; };
+    const NAVYX = '1F3864', blocks = M.progress === null ? 0 : Math.round(Math.max(0, Math.min(1, M.progress)) * 20);
+    for (let i = 1; i <= 20; i++) fill('pblk_' + i, i <= blocks ? NAVYX : 'D9DFEA');
+    const unit = (v, u) => v === null || v === '' ? '' : fmt(v) + ' ' + u;
+    textOf('tileVal_1', unit(M.reqNow, 'm³/h'));
+    textOf('tileVal_2', M.avg === null ? '' : M.avg.toFixed(1) + ' m³/h', M.avg === null ? NAVYX : (Math.round(M.avg * 10) / 10 >= M.reqNow ? '00863D' : 'C00000'));
+    textOf('tileVal_3', unit(M.loaded, 'm³')); textOf('tileVal_4', unit(M.rejected, 'm³'), M.rejected > 0 ? 'C00000' : NAVYX);
+    textOf('tileVal_6', M.remaining === null ? '' : unit(M.remaining, 'm³')); textOf('tileVal_7', M.finish === '—' ? '' : M.finish);
+    textOf('pPct', M.progress === null ? '' : Math.round(M.progress * 100) + '%');
+    if (M.hours.length) {
+      const x1 = geo.colLeft[1], x2 = geo.colLeft[13], y1 = geo.rowTop[18], y2 = geo.rowTop[20 + M.hours.length], cs = geo.corner;
+      const fr = place('tblFrame', x1, y1, x2, y2);
+      if (fr) { const gd = fr.sp.getElementsByTagNameNS(DA, 'gd')[0]; if (gd) gd.setAttribute('fmla', 'val ' + Math.round(cs / Math.min(x2 - x1, y2 - y1) * 100000)); }
+      place('tblCorner_1', x1 - .5, y1 - .5, x1 - .5 + cs, y1 - .5 + cs); place('tblCorner_2', x2 - cs + .5, y1 - .5, x2 + .5, y1 - .5 + cs);
+      place('tblCorner_3', x1 - .5, y2 - cs + .5, x1 - .5 + cs, y2 + .5); place('tblCorner_4', x2 - cs + .5, y2 - cs + .5, x2 + .5, y2 + .5);
+    }
+    store(drawPath, D);
+    if (M.hours.length > 17) {                       // long pours: every hour's time, slanted (same as the app)
+      const chartPath = 'xl/charts/chart1.xml', CH = load(chartPath), CNS = 'http://schemas.openxmlformats.org/drawingml/2006/chart';
+      const ax = CH.getElementsByTagNameNS(CNS, 'catAx')[0];
+      if (ax) { const bp = ax.getElementsByTagNameNS(DA, 'bodyPr')[0]; if (bp) bp.setAttribute('rot', '-2700000');
+        if (!ax.getElementsByTagNameNS(CNS, 'tickLblSkip').length) { const sk = CH.createElementNS(CNS, 'c:tickLblSkip'); sk.setAttribute('val', '1');
+          const after = ax.getElementsByTagNameNS(CNS, 'lblOffset')[0]; ax.insertBefore(sk, after ? after.nextSibling : null); } }
+      store(chartPath, CH);
+    }
+
     const out = XLSX.CFB.write(zip, {fileType:'zip', type:'array', compression:true});
-    const blob = new Blob([out], {type:'application/vnd.ms-excel.sheet.macroEnabled.12'}), a = document.createElement('a');
-    a.href = URL.createObjectURL(blob); a.download = (p.title || 'Pouring Report').replace(/[\\/:*?"<>|]/g, '-') + ' Report ' + (p.date || '').split('-').reverse().join('-') + '.xlsm';
+    const blob = new Blob([out], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}), a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = (p.title || 'Pouring Report').replace(/[\\/:*?"<>|]/g, '-') + ' Report ' + (p.date || '').split('-').reverse().join('-') + '.xlsx';
     document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 20000);
-    toast('Excel file downloaded — open it and press Enable Editing / Enable Content');
+    toast('Excel file downloaded — open it and press Enable Editing');
   } catch (err) { console.warn(err); toast('Could not make the Excel file'); }
 };
 
