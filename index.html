@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#1F3864">
-<meta name="app-build" content="20261014-5">
+<meta name="app-build" content="20261014-6">
 <title>Pouring Report</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png?v=3">
@@ -428,6 +428,14 @@ $('bShare').onclick = () => $('pic').toBlob(async blob => {
 }, 'image/png');
 
 $('bXls').onclick = async () => {
+  // ask where to save FIRST (the browser only allows the dialog straight after the tap); phones without
+  // the dialog fall back to a normal download
+  const fileName = (cur().title || 'Pouring Report').replace(/[\\/:*?"<>|]/g, '-') + ' Report ' + (cur().date || '').split('-').reverse().join('-') + '.xlsx';
+  let handle = null;
+  if (window.showSaveFilePicker) {
+    try { handle = await window.showSaveFilePicker({suggestedName: fileName, types: [{description: 'Excel workbook', accept: {'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx']}}]}); }
+    catch (err) { if (err && err.name === 'AbortError') return; handle = null; }
+  }
   try {
     if (!window.XLSX) await new Promise((ok, no) => { const s = document.createElement('script'); s.src = 'xlsx.full.min.js'; s.onload = ok; s.onerror = no; document.head.appendChild(s); });
     // The download is the user's own Excel sheet (template.xlsx = an empty, macro-free copy of Pouring Report.xlsm):
@@ -536,8 +544,9 @@ $('bXls').onclick = async () => {
     }
 
     const out = XLSX.CFB.write(zip, {fileType:'zip', type:'array', compression:true});
-    const blob = new Blob([out], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}), a = document.createElement('a');
-    a.href = URL.createObjectURL(blob); a.download = (p.title || 'Pouring Report').replace(/[\\/:*?"<>|]/g, '-') + ' Report ' + (p.date || '').split('-').reverse().join('-') + '.xlsx';
+    const blob = new Blob([out], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+    if (handle) { const wr = await handle.createWritable(); await wr.write(blob); await wr.close(); toast('Excel file saved — open it and press Enable Editing'); return; }
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = fileName;
     document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 20000);
     toast('Excel file downloaded — open it and press Enable Editing');
   } catch (err) { console.warn(err); toast('Could not make the Excel file'); }
