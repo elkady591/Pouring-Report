@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#1F3864">
-<meta name="app-build" content="20261014-10">
+<meta name="app-build" content="20261015-1">
 <title>Pouring Report</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png?v=3">
@@ -330,9 +330,12 @@ function draw(p, M){
   }
 
   // table
-  const cols = [130, 58, 58, 58, 58, 58, 74]; cols.push(CW - cols.reduce((a, b) => a + b, 0));
+  // plants that loaded nothing yet are left out; they appear with their first truck (all 5 while nothing is loaded)
+  let act = [0, 1, 2, 3, 4].filter(k => M.totals[k] > 0); if (!act.length) act = [0, 1, 2, 3, 4];
+  const NP = act.length, RC = NP + 1, CC = NP + 2;        // column numbers of RATE and COMMENTS
+  const cols = [130, ...act.map(() => 58), 74]; cols.push(CW - cols.reduce((a, b) => a + b, 0));
   const xs = []; cols.reduce((a, w) => (xs.push(a), a + w), X0);
-  const heads = ['TIME', ...p.plants, 'RATE|m³/h', 'COMMENTS'];
+  const heads = ['TIME', ...act.map(k => p.plants[k]), 'RATE|m³/h', 'COMMENTS'];
   const tableH = 40 + nRows * RH + (nRows ? RH : 0);      // the whole table sits inside one rounded frame
   g.save(); rr(X0 + .5, tableTop + .5, CW - 1, tableH - 1, 9); g.clip();
   g.fillStyle = C.navy; g.fillRect(X0, tableTop, CW, 40);
@@ -341,17 +344,17 @@ function draw(p, M){
   let y = tableTop + 40;
   M.hours.forEach(h => {
     box(xs[0], y, cols[0], RH, C.time); text(h.label, xs[0] + cols[0]/2, y + RH/2, {size:14, color:'#000', align:'center'});
-    for (let k = 0; k < 5; k++) { box(xs[k+1], y, cols[k+1], RH, '#fff'); if (h.plants[k]) text(fmt(h.plants[k]), xs[k+1] + cols[k+1]/2, y + RH/2, {size:14, bold:false, color:'#000', align:'center'}); }
-    box(xs[6], y, cols[6], RH, h.state === 'g' ? C.gF : h.state === 'r' ? C.rF : C.pF); text(fmt(h.rate), xs[6] + cols[6]/2, y + RH/2, {size:14, italic: h.state === 'p', color: h.state === 'g' ? C.gT : h.state === 'r' ? C.rT : C.grey, align:'center'});
-    const has = h.comment || h.auto !== null; box(xs[7], y, cols[7], RH, has ? C.yellow : '#fff');
-    if (h.comment) text(h.comment, xs[7] + cols[7]/2, y + RH/2, {size:13, bold:false, color:'#000', align:'center', max: cols[7] - 12});
-    else if (h.auto !== null) { g.font = '13px ' + FONT; const a = 'Client asked for ', b = String(h.auto), c = ' m³/h.', wa = g.measureText(a).width, wb = g.measureText(b).width, wc = g.measureText(c).width; let x = xs[7] + (cols[7] - wa - wb - wc) / 2;
+    act.forEach((k, j) => { box(xs[j+1], y, cols[j+1], RH, '#fff'); if (h.plants[k]) text(fmt(h.plants[k]), xs[j+1] + cols[j+1]/2, y + RH/2, {size:14, bold:false, color:'#000', align:'center'}); });
+    box(xs[RC], y, cols[RC], RH, h.state === 'g' ? C.gF : h.state === 'r' ? C.rF : C.pF); text(fmt(h.rate), xs[RC] + cols[RC]/2, y + RH/2, {size:14, italic: h.state === 'p', color: h.state === 'g' ? C.gT : h.state === 'r' ? C.rT : C.grey, align:'center'});
+    const has = h.comment || h.auto !== null; box(xs[CC], y, cols[CC], RH, has ? C.yellow : '#fff');
+    if (h.comment) text(h.comment, xs[CC] + cols[CC]/2, y + RH/2, {size:13, bold:false, color:'#000', align:'center', max: cols[CC] - 12});
+    else if (h.auto !== null) { g.font = '13px ' + FONT; const a = 'Client asked for ', b = String(h.auto), c = ' m³/h.', wa = g.measureText(a).width, wb = g.measureText(b).width, wc = g.measureText(c).width; let x = xs[CC] + (cols[CC] - wa - wb - wc) / 2;
       text(a, x, y + RH/2, {size:13, bold:false, color:'#000'}); text(b, x + wa, y + RH/2, {size:13, bold:false, color:'#FF0000'}); text(c, x + wa + wb, y + RH/2, {size:13, bold:false, color:'#000'}); }
     y += RH;
   });
   if (nRows) { box(X0, y, CW, RH, C.tot); text('TOTAL', xs[0] + cols[0]/2, y + RH/2, {size:14, color:'#000', align:'center'});
-    for (let k = 0; k < 5; k++) text(fmt(M.totals[k]), xs[k+1] + cols[k+1]/2, y + RH/2, {size:14, color:'#000', align:'center'});
-    text(fmt(M.loaded), xs[6] + cols[6]/2, y + RH/2, {size:14, color:'#000', align:'center'}); }
+    act.forEach((k, j) => text(fmt(M.totals[k]), xs[j+1] + cols[j+1]/2, y + RH/2, {size:14, color:'#000', align:'center'}));
+    text(fmt(M.loaded), xs[RC] + cols[RC]/2, y + RH/2, {size:14, color:'#000', align:'center'}); }
   g.restore(); rr(X0 + .5, tableTop + .5, CW - 1, tableH - 1, 9, null, C.line);
 }
 
@@ -535,6 +538,21 @@ $('bXls').onclick = async () => {
     // The file has no macros (Windows blocks macros in downloaded files), so the shapes the Excel macro
     // normally updates are set here: progress blocks, AVG / REJECTED colours, tile texts and the table frame.
     const geo = await (await fetch('template-geo.json', {cache:'no-cache'})).json();
+    // plants that loaded nothing: their columns (C..G) are hidden, like the Excel's LayoutTiles macro does
+    const anyLoad = M.totals.some(v => v > 0), idle = anyLoad ? [0, 1, 2, 3, 4].filter(k => !(M.totals[k] > 0)).map(k => k + 3) : [];
+    if (idle.length) {
+      const LD = load(sheetPath.Log), colsEl = LD.getElementsByTagNameNS(NS, 'cols')[0];
+      if (colsEl) {
+        const per = {};
+        Array.from(colsEl.getElementsByTagNameNS(NS, 'col')).forEach(c => { for (let i = +c.getAttribute('min'); i <= +c.getAttribute('max'); i++) per[i] = c; });
+        while (colsEl.firstChild) colsEl.removeChild(colsEl.firstChild);
+        Object.keys(per).map(Number).sort((a, b) => a - b).forEach(i => { const c = per[i].cloneNode(true); c.setAttribute('min', i); c.setAttribute('max', i);
+          if (idle.includes(i)) c.setAttribute('hidden', '1'); colsEl.appendChild(c); });
+        store(sheetPath.Log, LD);
+      }
+      const w = geo.colLeft.map((x, i) => i + 1 < geo.colLeft.length ? geo.colLeft[i + 1] - x : 0);
+      let acc = 0; geo.colLeft = geo.colLeft.map((x, i) => { const left = acc; acc += idle.includes(i + 1) ? 0 : w[i]; return left; });
+    }
     const XDR = 'http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing', DA = 'http://schemas.openxmlformats.org/drawingml/2006/main';
     const drawPath = 'xl/drawings/drawing1.xml', D = load(drawPath), EMU = 12700;
     const shape = name => { const nv = Array.from(D.getElementsByTagNameNS(XDR, 'cNvPr')).find(e => e.getAttribute('name') === name); if (!nv) return null;
@@ -562,6 +580,18 @@ $('bXls').onclick = async () => {
     textOf('tileVal_3', unit(M.loaded, 'm³')); textOf('tileVal_4', unit(M.rejected, 'm³'), M.rejected > 0 ? 'C00000' : NAVYX);
     textOf('tileVal_6', M.remaining === null ? '' : unit(M.remaining, 'm³')); textOf('tileVal_7', M.finish === '—' ? '' : M.finish);
     textOf('pPct', M.progress === null ? '' : Math.round(M.progress * 100) + '%');
+    if (idle.length) {                               // tiles, blocks and chart on the narrower visible width
+      const L0 = geo.colLeft[1], R0 = geo.colLeft[13], T0 = geo.rowTop[4], H1 = geo.rowTop[6] - geo.rowTop[4], H2 = geo.rowTop[8] - geo.rowTop[6], gp = 6, cw = (R0 - L0 - 3 * gp) / 4;
+      [[1, 0, 0, 1], [2, 1, 0, 1], [3, 2, 0, 1], [4, 3, 0, 1], [5, 0, 1, 2], [6, 2, 1, 1], [7, 3, 1, 1]].forEach(([i, c, r, sp]) => {
+        const x = L0 + c * (cw + gp), wd = cw * sp + gp * (sp - 1), y = T0 + (r ? H1 : 0) + 3, h = (r ? H2 : H1) - 6;
+        place('tileBg_' + i, x, y, x + wd, y + h); place('tileLb_' + i, x, y + 3, x + wd, y + 15);
+        if (i !== 5) place('tileVal_' + i, x + 4, y + 15, x + wd - 4, y + h - 2);
+        else { const bw = (wd - 24 - 40 - 3 * 19) / 20, by = y + 15 + (h - 17 - 11) / 2;
+          for (let k = 1; k <= 20; k++) { const bx = x + 12 + (k - 1) * (bw + 3); place('pblk_' + k, bx, by, bx + bw, by + 11); }
+          place('pPct', x + wd - 52, y + 15, x + wd - 12, y + h - 2); }
+      });
+      place('RateChart', L0, geo.rowTop[8] + 6, R0, geo.rowTop[17]);
+    }
     if (M.hours.length) {
       const x1 = geo.colLeft[1], x2 = geo.colLeft[13], y1 = geo.rowTop[18], y2 = geo.rowTop[20 + M.hours.length], cs = geo.corner;
       const fr = place('tblFrame', x1, y1, x2, y2);
