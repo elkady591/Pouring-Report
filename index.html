@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#1F3864">
-<meta name="app-build" content="20261016-1">
+<meta name="app-build" content="20261016-2">
 <title>Pouring Report</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png?v=3">
@@ -277,7 +277,7 @@ function draw(p, M){
     text(label, x + w/2, y + 15, {size:10.5, color:C.grey, align:'center'}); if (value !== null) text(value, x + w/2, y + 38, {size:20, color: color || C.navy, align:'center', max: w - 14}); return {x, y, w}; };
   tile(0,0,1,'REQUESTED RATE', fmt(M.reqNow) + ' m³/h');
   tile(1,0,1,'ACTUAL AVG RATE', M.avg === null ? '' : M.avg.toFixed(1) + ' m³/h', M.avg === null ? C.navy : (Math.round(M.avg*10)/10 >= M.reqNow ? C.green : C.red));
-  tile(2,0,1,'LOADED', fmt(M.loaded) + ' m³');
+  tile(2,0,1,'TOTAL', fmt(M.loaded - M.rejected) + ' m³');          // actually poured: loaded minus rejected
   tile(3,0,1,'REJECTED', fmt(M.rejected) + ' m³', M.rejected > 0 ? C.red : C.navy);
   const pct = M.progress === null ? '' : Math.round(M.progress * 100) + '%', poured = fmt(M.loaded - M.rejected) + ' of ' + fmt(M.q) + ' m³';
   const pt = tile(0,1,2, PSTYLE === 'A' ? 'PROGRESS' + (pct ? ' · ' + pct : '') : PSTYLE === 'E' ? '' : 'PROGRESS', null);
@@ -366,7 +366,7 @@ function render(){
   $('hTitle').textContent = p.title || 'New pour';
   const t = (l, v, cls, wide) => `<div class="tile${wide ? ' wide' : ''}"><span>${l}</span><b class="${cls || ''}">${v}</b></div>`;
   $('tiles').innerHTML =
-    t('LOADED', fmt(M.loaded) + ' m³') + t('REMAINING', M.remaining === null ? '—' : fmt(M.remaining) + ' m³') +
+    t('TOTAL', fmt(M.loaded - M.rejected) + ' m³') + t('REMAINING', M.remaining === null ? '—' : fmt(M.remaining) + ' m³') +
     t('ACTUAL AVG RATE', M.avg === null ? '—' : M.avg.toFixed(1) + ' m³/h', M.avg === null ? '' : (Math.round(M.avg*10)/10 >= M.reqNow ? 'good' : 'bad')) + t('REQUESTED RATE', fmt(M.reqNow) + ' m³/h') +
     t('EXPECTED FINISH', '<span style="display:inline;font-size:16px;color:inherit;letter-spacing:0">' + M.finish + '</span>') + t('REJECTED', fmt(M.rejected) + ' m³', M.rejected > 0 ? 'bad' : '') +
     `<div class="tile wide"><span>PROGRESS${M.progress === null ? '' : ' · ' + Math.round(M.progress*100) + '%'} · ${M.trucks} TRUCKS${M.toCheck ? ' · <span style="display:inline;color:#9a5b00">⚠ ' + M.toCheck + ' TO CHECK</span>' : ''}</span><div class="blocks">${Array.from({length:20}, (_, i) => `<i class="${i < Math.round(Math.max(0, Math.min(1, M.progress || 0)) * 20) ? 'on' : ''}"></i>`).join('')}</div></div>`;
@@ -578,7 +578,7 @@ $('bXls').onclick = async () => {
     const unit = (v, u) => v === null || v === '' ? '' : fmt(v) + ' ' + u;
     textOf('tileVal_1', unit(M.reqNow, 'm³/h'));
     textOf('tileVal_2', M.avg === null ? '' : M.avg.toFixed(1) + ' m³/h', M.avg === null ? NAVYX : (Math.round(M.avg * 10) / 10 >= M.reqNow ? '00863D' : 'C00000'));
-    textOf('tileVal_3', unit(M.loaded, 'm³')); textOf('tileVal_4', unit(M.rejected, 'm³'), M.rejected > 0 ? 'C00000' : NAVYX);
+    textOf('tileVal_3', unit(M.loaded - M.rejected, 'm³')); textOf('tileVal_4', unit(M.rejected, 'm³'), M.rejected > 0 ? 'C00000' : NAVYX);
     textOf('tileVal_6', M.remaining === null ? '' : unit(M.remaining, 'm³')); textOf('tileVal_7', M.finish === '—' ? '' : M.finish);
     textOf('pPct', M.progress === null ? '' : Math.round(M.progress * 100) + '%');
     if (idle.length) {                               // tiles, blocks and chart on the narrower visible width
