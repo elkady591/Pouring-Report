@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#1F3864">
-<meta name="app-build" content="20261015-1">
+<meta name="app-build" content="20261016-1">
 <title>Pouring Report</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png?v=3">
@@ -227,7 +227,7 @@ function compute(p){
       h.state = h.rate >= req ? 'g' : 'r';                     // no grey: the hour in progress is green or red too (user, 14-Oct-2026)
       M.hours.push(h);
     }
-    M.first = first; M.last = last; M.reqNow = req;
+    M.first = first; M.last = last; M.start = start; M.reqNow = req;
     M.avg = last - first >= 30 ? M.loaded / ((last - first) / 60) : null;
   } else { M.reqNow = +p.req || 0; M.avg = null; }
   M.finish = finishText(p, M);
@@ -239,7 +239,8 @@ function finishText(p, M){
   if (M.avg <= 0) return '—';
   const f = M.last + M.remaining / M.avg * 60;
   const base = p.date ? new Date(p.date + 'T00:00:00') : new Date(); base.setHours(0,0,0,0);
-  const dt = new Date(base.getTime()); dt.setDate(dt.getDate() + Math.floor(f / 1440) - Math.floor(M.first / 1440));
+  // the pour date is the day of the FIRST HOUR shown (a truck at 23:58 opens the 00:00 hour of that date)
+  const dt = new Date(base.getTime()); dt.setDate(dt.getDate() + Math.floor(f / 1440) - Math.floor(M.start / 1440));
   const today = new Date(); today.setHours(0,0,0,0);
   const diff = Math.round((dt - today) / 864e5);
   const day = diff === 0 ? 'Today' : diff === 1 ? 'Tomorrow' : dt.toLocaleDateString('en-GB', {weekday:'short', day:'numeric', month:'short'}).replace(',', '');
