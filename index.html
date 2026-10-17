@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#1F3864">
-<meta name="app-build" content="20261017-2">
+<meta name="app-build" content="20261017-3">
 <title>Pouring Report</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png?v=3">
@@ -214,7 +214,7 @@ function compute(p){
     let start = Math.round(first / 15) * 15;
     if (p.start) { const a = p.start.split(':'); start = +a[0]*60 + +a[1]; }
     const nH = Math.max(1, Math.min(48, Math.floor((last - start) / 60) + 1));
-    let req = +p.req || 0;
+    let req = +p.req || 0, wSum = 0, wMin = 0;
     for (let i = 0; i < nH; i++) {
       const lab = start + 60*i, from = i === 0 ? Math.min(start, first) : lab, to = lab + 60, key = String(lab);
       const h = {key, label: hhmm(lab) + ' – ' + hhmm(to), short: hhmm(lab), end: hhmm(to), plants:[0,0,0,0,0], rate:0, trucks:0, last: i === nH - 1};
@@ -223,14 +223,21 @@ function compute(p){
       h.changed = ch !== undefined && ch !== '' && +ch !== req;
       if (ch !== undefined && ch !== '') req = +ch;
       h.req = req;
+      const mins = Math.min(to, last) - Math.max(from, first);   // minutes of this hour inside the pour so far
+      if (mins > 0) { wSum += req * mins; wMin += mins; }
       h.comment = p.comments[key] || '';
       h.auto = !h.comment && ch !== undefined && ch !== '' ? ch : null;
       h.state = h.rate >= req ? 'g' : 'r';                     // no grey: the hour in progress is green or red too (user, 14-Oct-2026)
       M.hours.push(h);
     }
     M.first = first; M.last = last; M.start = start; M.reqNow = req;
+    // what the client asked for on average over the same time as our average: each rate counts for the
+    // minutes it was in force, so raising the rate late in the pour does not turn our average red
+    M.reqAvg = wMin > 0 ? wSum / wMin : req;
     M.avg = last - first >= 30 ? M.loaded / ((last - first) / 60) : null;
-  } else { M.reqNow = +p.req || 0; M.avg = null; }
+  } else { M.reqNow = M.reqAvg = +p.req || 0; M.avg = null; }
+  M.avgOk = M.avg !== null && Math.round(M.avg) >= Math.round(M.reqAvg);
+  M.target = Math.round(M.reqAvg) !== Math.round(M.reqNow) ? 'AVG Requested rate ' + Math.round(M.reqAvg) + ' m³/h' : '';   // only once the client changed the rate
   M.finish = finishText(p, M);
   return M;
 }
@@ -277,8 +284,10 @@ function draw(p, M){
   const TY = 86, GAP = 8, TH = 58, cw = (CW - 3 * GAP) / 4;
   const tile = (col, row, span, label, value, color) => { const x = X0 + col * (cw + GAP), y = TY + row * (TH + GAP), w = cw * span + GAP * (span - 1); rr(x + .5, y + .5, w - 1, TH - 1, 8, C.tile, '#D5DBE6');
     text(label, x + w/2, y + 15, {size:10.5, color:C.grey, align:'center'}); if (value !== null) text(value, x + w/2, y + 38, {size:20, color: color || C.navy, align:'center', max: w - 14}); return {x, y, w}; };
-  tile(0,0,1,'REQUESTED RATE', fmt(M.reqNow) + ' m³/h');
-  tile(1,0,1,'ACTUAL AVG RATE', M.avg === null ? '' : M.avg.toFixed(0) + ' m³/h', M.avg === null ? C.navy : (Math.round(M.avg) >= M.reqNow ? C.green : C.red));
+  const rt = tile(0,0,1,'REQUESTED RATE', null);
+  text(fmt(M.reqNow) + ' m³/h', rt.x + rt.w/2, rt.y + (M.target ? 34 : 38), {size:20, color:C.navy, align:'center', max: rt.w - 14});
+  if (M.target) text(M.target, rt.x + rt.w/2, rt.y + 50, {size:9.5, color:C.grey, align:'center', max: rt.w - 10});
+  tile(1,0,1,'ACTUAL AVG RATE', M.avg === null ? '' : M.avg.toFixed(0) + ' m³/h', M.avg === null ? C.navy : (M.avgOk ? C.green : C.red));
   tile(2,0,1,'TOTAL', fmt(M.loaded - M.rejected) + ' m³');          // actually poured: loaded minus rejected
   tile(3,0,1,'REJECTED', fmt(M.rejected) + ' m³', M.rejected > 0 ? C.red : C.navy);
   const pct = M.progress === null ? '' : Math.round(M.progress * 100) + '%', poured = fmt(M.loaded - M.rejected) + ' of ' + fmt(M.q) + ' m³';
@@ -369,7 +378,7 @@ function render(){
   const t = (l, v, cls, wide) => `<div class="tile${wide ? ' wide' : ''}"><span>${l}</span><b class="${cls || ''}">${v}</b></div>`;
   $('tiles').innerHTML =
     t('TOTAL', fmt(M.loaded - M.rejected) + ' m³') + t('REMAINING', M.remaining === null ? '—' : fmt(M.remaining) + ' m³') +
-    t('ACTUAL AVG RATE', M.avg === null ? '—' : M.avg.toFixed(0) + ' m³/h', M.avg === null ? '' : (Math.round(M.avg) >= M.reqNow ? 'good' : 'bad')) + t('REQUESTED RATE', fmt(M.reqNow) + ' m³/h') +
+    t('ACTUAL AVG RATE', M.avg === null ? '—' : M.avg.toFixed(0) + ' m³/h', M.avg === null ? '' : (M.avgOk ? 'good' : 'bad')) + t('REQUESTED RATE', fmt(M.reqNow) + ' m³/h' + (M.target ? '<small style="display:block;font-size:10px;font-weight:600;color:var(--grey)">' + M.target + '</small>' : '')) +
     t('EXPECTED FINISH', '<span style="display:inline;font-size:16px;color:inherit;letter-spacing:0">' + M.finish + '</span>') + t('REJECTED', fmt(M.rejected) + ' m³', M.rejected > 0 ? 'bad' : '') +
     `<div class="tile wide"><span>PROGRESS${M.progress === null ? '' : ' · ' + Math.round(M.progress*100) + '%'} · ${M.trucks} TRUCKS${M.toCheck ? ' · <span style="display:inline;color:#9a5b00">⚠ ' + M.toCheck + ' TO CHECK</span>' : ''}</span><div class="blocks">${Array.from({length:20}, (_, i) => `<i class="${i < Math.round(Math.max(0, Math.min(1, M.progress || 0)) * 20) ? 'on' : ''}"></i>`).join('')}</div></div>`;
   draw(p, M);
@@ -589,7 +598,8 @@ $('bXls').onclick = async () => {
     for (let i = 1; i <= 20; i++) fill('pblk_' + i, i <= blocks ? NAVYX : 'D9DFEA');
     const unit = (v, u) => v === null || v === '' ? '' : fmt(v) + ' ' + u;
     textOf('tileVal_1', unit(M.reqNow, 'm³/h'));
-    textOf('tileVal_2', M.avg === null ? '' : M.avg.toFixed(0) + ' m³/h', M.avg === null ? NAVYX : (Math.round(M.avg) >= M.reqNow ? '00863D' : 'C00000'));
+    textOf('tileVal_2', M.avg === null ? '' : M.avg.toFixed(0) + ' m³/h', M.avg === null ? NAVYX : (M.avgOk ? '00863D' : 'C00000'));
+    textOf('tileSub_1', M.target || ' ');
     textOf('tileVal_3', unit(M.loaded - M.rejected, 'm³')); textOf('tileVal_4', unit(M.rejected, 'm³'), M.rejected > 0 ? 'C00000' : NAVYX);
     textOf('tileVal_6', M.remaining === null ? '' : unit(M.remaining, 'm³')); textOf('tileVal_7', M.finish === '—' ? '' : M.finish);
     textOf('pPct', M.progress === null ? '' : Math.round(M.progress * 100) + '%');
@@ -604,6 +614,12 @@ $('bXls').onclick = async () => {
           place('pPct', x + wd - 52, y + 15, x + wd - 12, y + h - 2); }
       });
       place('RateChart', L0, geo.rowTop[8] + 6, R0, geo.rowTop[17]);
+    }
+    {                                                // AVG Requested rate line under REQUESTED RATE (as the RefreshShapes macro)
+      const b = shape('tileBg_1'), xf = b && b.sp.getElementsByTagNameNS(DA, 'xfrm')[0];
+      if (xf) { const off = xf.getElementsByTagNameNS(DA, 'off')[0], ext = xf.getElementsByTagNameNS(DA, 'ext')[0];
+        const x = +off.getAttribute('x') / EMU, y = +off.getAttribute('y') / EMU, wd = +ext.getAttribute('cx') / EMU, h = +ext.getAttribute('cy') / EMU, up = M.target ? 6 : 0;
+        place('tileVal_1', x + 4, y + 15 - up, x + wd - 4, y + h - 2 - up); place('tileSub_1', x, y + h - 12, x + wd, y + h - 2); }
     }
     if (M.hours.length) {
       const x1 = geo.colLeft[1], x2 = geo.colLeft[13], y1 = geo.rowTop[18], y2 = geo.rowTop[20 + M.hours.length], cs = geo.corner;
