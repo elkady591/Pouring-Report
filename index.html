@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#1F3864">
-<meta name="app-build" content="20261016-2">
+<meta name="app-build" content="20261017-1">
 <title>Pouring Report</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png?v=3">
@@ -101,6 +101,7 @@ textarea{min-height:120px;resize:vertical;direction:ltr}
       <label>Rejected m³ (manual, optional)</label><input id="sRej" type="number" inputmode="decimal" data-k="rejManual">
       <label>Plant names (#1 … #5)</label><div id="plants" style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px"></div>
     </div>
+    <button class="big" id="bFin" style="background:#00863D">Mark this pour as FINISHED</button>
     <button class="big alt" id="bXls">Download this pour as Excel</button>
     <button class="big alt" id="bNew">New pour</button>
     <div class="card"><h2>Saved pours</h2>
@@ -201,13 +202,13 @@ function compute(p){
   rows.forEach(r => { if (!r.flag && r.serial !== null && r.serial > minS && !serials.includes(r.serial - 1) && serials.filter(x => x === r.serial - 2).length < 2) { r.flag = 'Missing serial ' + (r.serial - 1); r.warn = true; } });
 
   const live = rows.filter(r => !r.dup), timed = live.filter(r => r.t !== undefined);
-  const M = {rows, hours:[], totals:[0,0,0,0,0], trucks: timed.length, toCheck: rows.filter(r => r.warn && !r.dup).length};
+  const M = {rows, hours:[], totals:[0,0,0,0,0], net:[0,0,0,0,0], trucks: timed.length, toCheck: rows.filter(r => r.warn && !r.dup).length};
   M.loaded = live.reduce((a, r) => a + (r.qty || 0), 0);
   M.rejected = live.reduce((a, r) => a + r.rejQty, 0) + (+p.rejManual || 0);
   M.q = +p.q || 0;
   M.remaining = p.q === '' ? null : M.q - M.loaded + M.rejected;
   M.progress = M.q > 0 ? (M.loaded - M.rejected) / M.q : null;
-  live.forEach(r => { if (r.plant !== null && r.qty) M.totals[r.plant] += r.qty; });
+  live.forEach(r => { if (r.plant !== null && r.qty) { M.totals[r.plant] += r.qty; M.net[r.plant] += r.qty - r.rejQty; } });   // net = after rejections (TOTAL row)
   if (timed.length) {
     const first = Math.min(...timed.map(r => r.t)), last = Math.max(...timed.map(r => r.t));
     let start = Math.round(first / 15) * 15;
@@ -234,6 +235,7 @@ function compute(p){
   return M;
 }
 function finishText(p, M){
+  if (p.finished) return '—';                       // pour closed by the user
   if (M.remaining === null || M.avg === null) return '—';
   if (M.remaining <= 0) return 'Done';
   if (M.avg <= 0) return '—';
@@ -354,8 +356,8 @@ function draw(p, M){
     y += RH;
   });
   if (nRows) { box(X0, y, CW, RH, C.tot); text('TOTAL', xs[0] + cols[0]/2, y + RH/2, {size:14, color:'#000', align:'center'});
-    act.forEach((k, j) => text(fmt(M.totals[k]), xs[j+1] + cols[j+1]/2, y + RH/2, {size:14, color:'#000', align:'center'}));
-    text(fmt(M.loaded), xs[RC] + cols[RC]/2, y + RH/2, {size:14, color:'#000', align:'center'}); }
+    act.forEach((k, j) => text(fmt(M.net[k]), xs[j+1] + cols[j+1]/2, y + RH/2, {size:14, color:'#000', align:'center'}));
+    text(fmt(M.loaded - M.rejected), xs[RC] + cols[RC]/2, y + RH/2, {size:14, color:'#000', align:'center'}); }
   g.restore(); rr(X0 + .5, tableTop + .5, CW - 1, tableH - 1, 9, null, C.line);
 }
 
@@ -393,7 +395,12 @@ function renderSetup(){
   const q = $('fName').value.trim().toLowerCase(), from = $('fFrom').value, to = $('fTo').value;
   const list = all.filter(x => (!q || (x.title || 'untitled pour').toLowerCase().includes(q)) && (!from || (x.date || '') >= from) && (!to || (x.date || '') <= to));
   $('fCount').textContent = q || from || to ? `${list.length} of ${all.length} pours` : `${all.length} pours`;
-  $('pours').innerHTML = list.map(x => { const m = x.id === p.id ? M : compute(x); return `<div class="pour"><div><b>${esc(x.title || 'Untitled pour')}</b><small>${esc(x.date || '')} · ${fmt(m.loaded)} m³${x.q !== '' ? ' of ' + fmt(+x.q) : ''}</small></div>${x.id === p.id ? '<span class="muted">open</span>' : `<button class="sm" data-open="${x.id}">Open</button>`}<button class="sm" data-delpour="${x.id}" style="color:#C00000">Delete</button></div>`; }).join('') || '<div class="muted">No pours match the filter.</div>';
+  const fin = !!p.finished;
+  $('bFin').textContent = fin ? 'Reopen this pour' : 'Mark this pour as FINISHED';
+  $('bFin').style.background = fin ? '#595959' : '#00863D';
+  $('bAdd').disabled = fin; $('paste').disabled = fin;
+  $('paste').placeholder = fin ? 'This pour is FINISHED — reopen it in Setup to add messages.' : 'Copy the truck messages in WhatsApp and paste them here…';
+  $('pours').innerHTML = list.map(x => { const m = x.id === p.id ? M : compute(x); return `<div class="pour"><div><b>${esc(x.title || 'Untitled pour')}</b><small>${esc(x.date || '')} · ${fmt(m.loaded)} m³${x.q !== '' ? ' of ' + fmt(+x.q) : ''}${x.finished ? ' · <span style="display:inline;color:#00863D;font-weight:700">FINISHED</span>' : ''}</small></div>${x.id === p.id ? '<span class="muted">open</span>' : `<button class="sm" data-open="${x.id}">Open</button>`}<button class="sm" data-delpour="${x.id}" style="color:#C00000">Delete</button></div>`; }).join('') || '<div class="muted">No pours match the filter.</div>';
   $('build').textContent = document.querySelector('meta[name=app-build]').content;
 }
 
@@ -401,7 +408,11 @@ function renderSetup(){
 function toast(s){ const t = $('toast'); t.textContent = s; t.classList.add('on'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('on'), 2600); }
 document.querySelector('nav').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return;
   document.querySelectorAll('nav button').forEach(x => x.classList.toggle('on', x === b)); document.querySelectorAll('.view').forEach(v => v.classList.toggle('on', v.id === 'v-' + b.dataset.v)); window.scrollTo(0, 0); });
+$('bFin').onclick = () => { const p = cur();
+  if (!p.finished && !confirm('Mark "' + (p.title || 'this pour') + '" as FINISHED? Expected finish becomes —, and no more messages can be added until you reopen it.')) return;
+  p.finished = !p.finished; save(); render(); toast(p.finished ? 'Pour marked as FINISHED' : 'Pour reopened'); };
 $('bAdd').onclick = () => {
+  if (cur().finished) { toast('This pour is FINISHED — reopen it in Setup first'); return; }
   const p = cur(), have = new Set(p.msgs.map(m => cleanLine(m.t))); let added = 0, dup = 0, noise = 0;
   $('paste').value.split(/\r?\n/).forEach(line => { const t = cleanLine(line); if (!t) return; if (isNoise(t)) { noise++; return; } if (have.has(t)) { dup++; return; }
     have.add(t); p.msgs.push({t, r:null}); p.del = p.del.filter(d => d !== t); added++; });
@@ -528,6 +539,7 @@ $('bXls').onclick = async () => {
     L.str('P9', p.title); if (p.date) L.num('P10', serial(p.date)); L.num('P11', p.q === '' ? '' : +p.q); L.num('P12', p.req === '' ? '' : +p.req);
     if (p.start) { const a = p.start.split(':'); L.num('P13', (+a[0] * 60 + +a[1]) / 1440); }
     L.num('P14', p.rejManual === '' ? '' : +p.rejManual);
+    if (p.finished) L.str('P15', 'Yes');              // "Pour finished" in the sheet: EXPECTED FINISH shows —
     p.plants.forEach((name, i) => L.str('CDEFG'[i] + '19', name));
     M.hours.forEach((h, i) => { const r = 20 + i, ch = p.changes[h.key];
       if (ch !== undefined && ch !== '') L.num('O' + r, +ch);
