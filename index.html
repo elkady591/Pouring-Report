@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#1F3864">
-<meta name="app-build" content="20261017-4">
+<meta name="app-build" content="20261018-1">
 <title>Pouring Report</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png?v=3">
@@ -37,6 +37,8 @@ nav b{display:block;font-size:19px;line-height:1.1}
 .good{color:var(--green)!important}.bad{color:var(--red)!important}
 button.big{width:100%;border:0;border-radius:10px;background:var(--navy);color:#fff;font:inherit;font-weight:700;font-size:16px;padding:13px;margin-bottom:12px}
 button.big.alt{background:#fff;color:var(--navy);border:1.5px solid var(--navy)}
+.btnrow{display:grid;grid-template-columns:repeat(4,1fr);gap:8px} .btnrow button.big{padding:13px 4px;font-size:15px;white-space:nowrap}
+@media (max-width:420px){ .btnrow{grid-template-columns:repeat(2,1fr)} }
 button.big.warn{background:#fff;color:var(--red);border:1.5px solid var(--red)}
 button.sm{border:1px solid var(--line);background:#fff;border-radius:7px;padding:6px 10px;font:inherit;font-size:13px}
 #picwrap{overflow:auto;border:1px solid #dfe3ea;border-radius:8px;background:#fff}
@@ -77,7 +79,7 @@ textarea{min-height:120px;resize:vertical;direction:ltr}
 <main>
   <section class="view on" id="v-report">
     <div class="card"><div class="tiles" id="tiles"></div></div>
-    <button class="big" id="bShare">📋 Copy picture</button>
+    <div class="btnrow"><button class="big" id="bSavePic">💾 Save</button><button class="big" id="bCopyPic">📋 Copy</button><button class="big" id="bShare">📤 Share</button><button class="big" id="bOpenPic">🔍 Open</button></div>
     <div class="card"><h2>Picture preview <button class="sm" id="bZoom" style="float:right;margin-top:-4px">Zoom</button></h2>
       <div id="picwrap"><canvas id="pic"></canvas></div></div>
     <div class="card"><h2>Hours — rate change &amp; comments</h2><div id="hours"></div></div>
@@ -467,17 +469,29 @@ $('bDel').onclick = () => deletePour(S.cur);
 $('fName').addEventListener('input', renderSetup);
 $('fClear').onclick = () => { $('fName').value = $('fFrom').value = $('fTo').value = ''; renderSetup(); };
 $('bZoom').onclick = () => $('picwrap').classList.toggle('zoom');
+// 📤 Share = the device's share list (same as Concrete Dispatching); where it isn't available, Copy / Save still work
 $('bShare').onclick = () => $('pic').toBlob(async blob => {
-  // same as Concrete Dispatching's WhatsApp Photo: PC = copy (paste it in any chat), phone = the share list to pick the app
-  const name = (cur().title || 'Pouring Report').replace(/[\\/:*?"<>|]/g, '-') + '.png', file = new File([blob], name, {type:'image/png'});
-  const touch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+  const file = new File([blob], picName(), {type:'image/png'});
   try {
-    if (touch && navigator.canShare && navigator.canShare({files:[file]})) { await navigator.share({files:[file]}); return; }
-    if (navigator.clipboard && window.ClipboardItem) {
-      try { await navigator.clipboard.write([new ClipboardItem({'image/png': blob})]); toast('Copied ✓ — paste it in WhatsApp (Ctrl+V)'); return; } catch (e) {}
-    }
-  } catch (err) { if (err && err.name === 'AbortError') return; }
-  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click(); toast('Picture downloaded');
+    if (navigator.canShare && navigator.canShare({files:[file]})) { await navigator.share({files:[file]}); toast('Shared ✓'); return; }
+    toast('Sharing is not available on this device — use Copy or Save');
+  } catch (err) { if (!(err && err.name === 'AbortError')) toast('Could not share'); }
+}, 'image/png');
+// 🔍 Open = the picture full size in a new tab (the tab is opened inside the tap so pop-up blockers allow it)
+$('bOpenPic').onclick = () => { const win = window.open('', '_blank');
+  $('pic').toBlob(blob => { const url = URL.createObjectURL(blob); if (win) win.location.href = url; else location.href = url; }, 'image/png'); };
+
+// 💾 Save = always a .png on this device; 📋 Copy = always to the clipboard (paste anywhere)
+const picName = () => { const p = cur(), d = new Date();
+  return (p.title || 'Pouring Report').replace(/[\\/:*?"<>|]/g, '-') + ' ' + (p.date || '').split('-').reverse().join('-') + ' ' + String(d.getHours()).padStart(2,'0') + String(d.getMinutes()).padStart(2,'0') + '.png'; };
+$('bSavePic').onclick = () => $('pic').toBlob(blob => {
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = picName(); document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000); toast('Saved ✓');
+}, 'image/png');
+$('bCopyPic').onclick = () => $('pic').toBlob(async blob => {
+  try { if (!(navigator.clipboard && window.ClipboardItem)) throw new Error('not supported');
+    await navigator.clipboard.write([new ClipboardItem({'image/png': blob})]); toast('Copied ✓ — paste it anywhere'); }
+  catch (e) { toast('Copying pictures is not supported here — use Save'); }
 }, 'image/png');
 
 $('bXls').onclick = async () => {
