@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#1F3864">
-<meta name="app-build" content="20261102-1">
+<meta name="app-build" content="20261102-2">
 <title>Pouring Report</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png?v=3">
@@ -265,6 +265,7 @@ function compute(p){
       if (mins > 0) { wSum += req * mins; wMin += mins; }
       h.comment = p.comments[key] || '';
       h.auto = ch !== undefined && ch !== '' ? ch : null;      // rate and comment in the same hour: both, one under the other
+      if (+h.auto === 0 && /hold loading/i.test(h.comment)) h.auto = null;   // the hold comment already says the rate is 0
       h.state = h.rate >= req ? 'g' : 'r';                     // no grey: the hour in progress is green or red too (user, 14-Oct-2026)
       M.hours.push(h);
     }
