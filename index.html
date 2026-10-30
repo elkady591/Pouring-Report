@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#1F3864">
-<meta name="app-build" content="20261020-2">
+<meta name="app-build" content="20261030-3">
 <title>Pouring Report</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png?v=3">
@@ -71,6 +71,10 @@ textarea{min-height:120px;resize:vertical;direction:ltr}
 .scheck.ok{background:#E8F5EC;color:#00632B}.scheck.bad{background:#FFF7DB;color:#7a4a00}
 .scheck .si{display:inline-flex;align-items:center;gap:6px;margin:6px 10px 0 0}.scheck .si button{padding:3px 8px;font-size:12px}
 .msg.hl{outline:2px solid #C00000;outline-offset:-2px}
+.selbar{display:flex;gap:8px;align-items:center;margin:0 0 8px}.selbar .sp{flex:1}
+.msg .top input.ck{width:22px;height:22px;margin:0;padding:0;flex:none;accent-color:#C00000;pointer-events:none}
+.msg.sel{background:#FFF1F1}
+#delBar{position:sticky;bottom:70px;margin-top:10px}#delBar button{margin:0;background:#C00000;color:#fff}
 .pour{display:flex;align-items:center;gap:8px;border-top:1px solid #e6e9ef;padding:8px 0}
 .pour div{flex:1}.pour small{color:var(--grey);display:block}
 #toast{position:fixed;left:50%;bottom:92px;transform:translateX(-50%);background:#222;color:#fff;padding:9px 14px;border-radius:18px;font-size:13.5px;opacity:0;transition:opacity .25s;pointer-events:none;z-index:9;max-width:90%;text-align:center}
@@ -95,7 +99,7 @@ textarea{min-height:120px;resize:vertical;direction:ltr}
       <textarea id="paste" placeholder="Copy the truck messages in WhatsApp and paste them here…"></textarea>
       <div style="display:flex;gap:8px;margin-top:8px"><button class="big" id="bAdd" style="margin:0">Add messages</button></div>
       <div class="muted" id="addInfo" style="margin-top:8px"></div></div>
-    <div class="card"><h2 id="mHead">Messages</h2><div id="sCheck"></div><div id="msgs"></div></div>
+    <div class="card"><h2 id="mHead">Messages</h2><div id="sCheck"></div><div id="selBar"></div><div id="msgs"></div><div id="delBar"></div></div>
   </section>
 
   <section class="view" id="v-setup">
@@ -419,11 +423,16 @@ function render(){
       <div class="e"><input type="number" inputmode="decimal" placeholder="Client asked" data-ch="${h.key}" value="${esc(p.changes[h.key] === undefined ? '' : p.changes[h.key])}"><input placeholder="Comment" data-cm="${h.key}" value="${esc(h.comment)}"></div></div>`).join('') : '<div class="muted">Add messages to see the hours.</div>';
   renderMsgs(); renderSetup(); renderSync();
 }
+let SEL = null;                                       // messages ticked for deleting (by their text), null = not selecting
 function renderMsgs(){
   const p = cur();
+  if (SEL) { const have = new Set(M.rows.map(r => r.text)); SEL.forEach(t => { if (!have.has(t)) SEL.delete(t); }); if (!M.rows.length) SEL = null; }
+  $('selBar').innerHTML = !M.rows.length ? '' : SEL ? `<div class="selbar"><button class="sm" data-s="cancel">✕ Cancel</button><span class="sp muted">${SEL.size} selected</span><button class="sm" data-s="all">${SEL.size === M.rows.length ? 'Select none' : 'Select all'}</button></div>`
+    : '<div class="selbar"><span class="sp"></span><button class="sm" data-s="on">☐ Select</button></div>';
+  $('delBar').innerHTML = SEL && SEL.size ? `<button class="big" data-s="del">🗑 Delete selected (${SEL.size})</button>` : '';
   $('mHead').textContent = `Messages · ${M.trucks} trucks · ${fmt(M.loaded)} m³` + (M.toCheck ? ` · ⚠ ${M.toCheck}` : '');
-  $('msgs').innerHTML = M.rows.length ? M.rows.slice().reverse().map(r => `<div class="msg${r.warn ? ' warn' : ''}${r.rej ? ' rej' : ''}" data-i="${r.idx}">
-    <div class="top"><span class="n">${r.n || ''}</span><span class="t">${r.t === undefined ? '--:--' : hhmm(r.t)}</span><span class="p">${r.plant === null ? '?' : esc(p.plants[r.plant])}</span><span class="q">${r.qty === null ? '?' : fmt(r.qty) + ' m³'}</span>
+  $('msgs').innerHTML = M.rows.length ? M.rows.slice().reverse().map(r => `<div class="msg${r.warn ? ' warn' : ''}${r.rej ? ' rej' : ''}${SEL && SEL.has(r.text) ? ' sel' : ''}" data-i="${r.idx}">
+    <div class="top">${SEL ? `<input type="checkbox" class="ck" tabindex="-1"${SEL.has(r.text) ? ' checked' : ''}>` : ''}<span class="n">${r.n || ''}</span><span class="t">${r.t === undefined ? '--:--' : hhmm(r.t)}</span><span class="p">${r.plant === null ? '?' : esc(p.plants[r.plant])}</span><span class="q">${r.qty === null ? '?' : fmt(r.qty) + ' m³'}</span>
       <span class="f ${r.warn ? 'flag-w' : 'flag-i'}">${r.warn ? '⚠ ' : ''}${esc(r.flag)}${r.rej ? ' · rejected ' + fmt(r.rejQty) : ''}</span></div>
     <div class="raw">${esc(r.text)}</div>
     ${r.loadWarn ? '<div class="btns qa"><button class="sm" data-a="edit">✎ Edit</button><button class="sm" data-a="okload" style="color:#00863D;font-weight:700">✓ OK — I loaded it like this</button></div>' : ''}
@@ -471,6 +480,7 @@ $('bAdd').onclick = () => {
 };
 $('msgs').addEventListener('click', e => {
   const row = e.target.closest('.msg'); if (!row) return; const p = cur(), i = +row.dataset.i, a = e.target.dataset.a;
+  if (SEL) { const t = cleanLine(p.msgs[i].t); SEL.has(t) ? SEL.delete(t) : SEL.add(t); renderMsgs(); return; }   // selecting: a tap ticks the message
   if (!a) { if (!e.target.closest('.ed')) row.classList.toggle('open'); return; }
   const m = p.msgs[i];
   if (a === 'edit') { row.classList.add('open'); const inp = row.querySelector('[data-edit]'); inp.focus(); inp.select(); return; }
@@ -482,6 +492,14 @@ $('msgs').addEventListener('click', e => {
   if (a === 'del') { if (!confirm('Delete this message?')) return; p.del.push(cleanLine(m.t)); p.msgs.splice(i, 1); }
   save(); render();
 });
+const selClick = e => { const s = e.target.closest('[data-s]'); if (!s) return; const p = cur();
+  if (s.dataset.s === 'on') SEL = new Set();
+  if (s.dataset.s === 'cancel') SEL = null;
+  if (s.dataset.s === 'all') SEL = SEL.size === M.rows.length ? new Set() : new Set(M.rows.map(r => r.text));
+  if (s.dataset.s === 'del') { const n = SEL.size; if (!n || !confirm(`Delete ${n} message${n > 1 ? 's' : ''}? They are removed on every device.`)) return;
+    p.msgs = p.msgs.filter(m => !SEL.has(cleanLine(m.t))); p.del = Array.from(new Set([...p.del, ...SEL])); SEL = null; save(); render(); toast(n + ' messages deleted'); return; }
+  renderMsgs(); };
+$('selBar').addEventListener('click', selClick); $('delBar').addEventListener('click', selClick);
 $('sCheck').addEventListener('click', e => { const d = e.target.dataset, p = cur();
   if (d.sok) { p.serialOk = Array.from(new Set([...(p.serialOk || []), +d.sok])); save(); render(); toast('No. ' + d.sok + ' marked OK (no truck)'); }
   if (d.sshow) { const rows = [...document.querySelectorAll('#msgs .msg')].filter(el => { const r = M.rows.find(x => x.idx === +el.dataset.i); return r && r.serial === +d.sshow; });
