@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#1F3864">
-<meta name="app-build" content="20261030-3">
+<meta name="app-build" content="20261030-4">
 <title>Pouring Report</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png?v=3">
@@ -354,7 +354,7 @@ function draw(p, M){
   if (nRows) {
     const padL = 34, padR = 20, slot = (CW - padL - padR) / nRows, step = Math.max(1, Math.ceil(46 / slot)), crowded = step > 1;
     const room = !crowded || XSTYLE === 'now' || XSTYLE === 'C' ? 30 : XSTYLE === 'D' ? 40 : 46;   // space under the bars for the times
-    const top = CY + 30, base = CY + CH - room, bw = Math.min(150, slot * .68);
+    const top = CY + 38, base = CY + CH - room, bw = Math.min(150, slot * .68);
     const max = Math.max(1, ...M.hours.map(h => Math.max(h.rate, h.req))) * 1.05, yOf = v => base - (base - top) * v / max;
     const vs = slot < 30 ? 10 : 12;
     const lbl = (s, cx, i) => {                     // time under a bar; crowded pours need a different layout
@@ -374,6 +374,9 @@ function draw(p, M){
     g.strokeStyle = C.navy; g.lineWidth = 2.5; g.setLineDash([9,6]); g.beginPath();
     M.hours.forEach((h, i) => { const x1 = X0 + padL + slot * i + (i ? 0 : slot * .12), x2 = X0 + padL + slot * (i + 1) - (i === nRows - 1 ? slot * .12 : 0), y = yOf(h.req); if (i) g.lineTo(x1, y); else g.moveTo(x1, y); g.lineTo(x2, y); });
     g.stroke(); g.setLineDash([]);
+    { const lx = X0 + CW - 14, ly = CY + 13;         // small key: the dashed line is what the client asked for
+      text('Requested rate', lx, ly, {size:10.5, bold:false, color:C.navy, align:'right'});
+      const tw = g.measureText('Requested rate').width; g.strokeStyle = C.navy; g.lineWidth = 2.5; g.setLineDash([9,6]); g.beginPath(); g.moveTo(lx - tw - 38, ly + .5); g.lineTo(lx - tw - 8, ly + .5); g.stroke(); g.setLineDash([]); }
     M.hours.forEach((h, i) => { const cx = X0 + padL + slot * (i + .5); let y = yOf(h.rate) - 10; if (Math.abs(y - yOf(h.req)) < 9) y = yOf(Math.max(h.rate, h.req)) - 13;
       const w = g.measureText(fmt(h.rate)).width; rr(cx - w/2 - 5, y - 8, w + 10, 16, 5, 'rgba(255,255,255,.85)'); text(fmt(h.rate), cx, y, {size:vs, bold:false, color:'#111', align:'center'}); });
   }
