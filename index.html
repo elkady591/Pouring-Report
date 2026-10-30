@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#1F3864">
-<meta name="app-build" content="20261030-4">
+<meta name="app-build" content="20261102-1">
 <title>Pouring Report</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png?v=3">
@@ -54,7 +54,8 @@ textarea{min-height:120px;resize:vertical;direction:ltr}
 .hour .h span{flex:1}
 .chip{display:inline-block;min-width:54px;text-align:center;border-radius:6px;padding:2px 6px;font-weight:700}
 .chip.g{background:#C6EFCE;color:#006100}.chip.r{background:#FFC7CE;color:#9C0006}.chip.p{background:#EDEDED;color:var(--grey);font-style:italic}
-.hour .e{display:grid;grid-template-columns:110px 1fr;gap:8px;margin-top:6px}
+.hour .e{display:grid;grid-template-columns:110px auto 1fr;gap:8px;margin-top:6px}
+.hour .e button{padding:6px 10px;font-size:13px;font-weight:700;color:#C00000;border-color:#C00000;white-space:nowrap}
 .hour .e input{padding:6px 8px;font-size:14px}
 .msg{border-top:1px solid #e6e9ef;padding:7px 0;font-size:13.5px}
 .msg .top{display:flex;gap:8px;align-items:center}
@@ -399,7 +400,7 @@ function draw(p, M){
     act.forEach((k, j) => { box(xs[j+1], y, cols[j+1], RH, '#fff'); if (h.plants[k]) text(fmt(h.plants[k]), xs[j+1] + cols[j+1]/2, y + RH/2, {size:14, bold:false, color:'#000', align:'center'}); });
     box(xs[RC], y, cols[RC], RH, h.state === 'g' ? C.gF : h.state === 'r' ? C.rF : C.pF); text(fmt(h.rate), xs[RC] + cols[RC]/2, y + RH/2, {size:14, italic: h.state === 'p', color: h.state === 'g' ? C.gT : h.state === 'r' ? C.rT : C.grey, align:'center'});
     const has = h.comment || h.auto !== null; box(xs[CC], y, cols[CC], RH, has ? C.yellow : '#fff');
-    if (h.comment) text(h.comment, xs[CC] + cols[CC]/2, y + RH/2 + (two ? 9 : 0), {size:13, bold:false, color:'#000', align:'center', max: cols[CC] - 12});
+    if (h.comment) text(h.comment, xs[CC] + cols[CC]/2, y + RH/2 + (two ? 9 : 0), {size:13, bold:false, color: /hold loading/i.test(h.comment) ? C.barR : '#000', align:'center', max: cols[CC] - 12});   // the hold comment (PAUSE) is red
     if (h.auto !== null) { const ay = y + RH/2 - (two ? 9 : 0); g.font = '13px ' + FONT; const a = 'Client asked for ', b = String(h.auto), c = ' m³/h.', wa = g.measureText(a).width, wb = g.measureText(b).width, wc = g.measureText(c).width; let x = xs[CC] + (cols[CC] - wa - wb - wc) / 2;
       text(a, x, ay, {size:13, bold:false, color:'#000'}); text(b, x + wa, ay, {size:13, bold:false, color:'#FF0000'}); text(c, x + wa + wb, ay, {size:13, bold:false, color:'#000'}); }
     y += RH;
@@ -423,7 +424,7 @@ function render(){
     `<div class="tile wide"><span>PROGRESS${M.progress === null ? '' : ' · ' + Math.round(M.progress*100) + '%'} · ${M.trucks} TRUCKS${M.toCheck ? ' · <span style="display:inline;color:#9a5b00">⚠ ' + M.toCheck + ' TO CHECK</span>' : ''}</span><div class="blocks">${Array.from({length:20}, (_, i) => `<i class="${i < Math.round(Math.max(0, Math.min(1, M.progress || 0)) * 20) ? 'on' : ''}"></i>`).join('')}</div></div>`;
   draw(p, M);
   $('hours').innerHTML = M.hours.length ? M.hours.map(h => `<div class="hour"><div class="h"><span>${h.label}</span><em class="muted" style="font-style:normal">${h.trucks} trucks</em><i class="chip ${h.state}" style="font-style:${h.state === 'p' ? 'italic' : 'normal'}">${fmt(h.rate)}</i></div>
-      <div class="e"><input type="number" inputmode="decimal" placeholder="Client asked" data-ch="${h.key}" value="${esc(p.changes[h.key] === undefined ? '' : p.changes[h.key])}"><input placeholder="Comment" data-cm="${h.key}" value="${esc(h.comment)}"></div></div>`).join('') : '<div class="muted">Add messages to see the hours.</div>';
+      <div class="e"><input type="number" inputmode="decimal" placeholder="Client asked" data-ch="${h.key}" value="${esc(p.changes[h.key] === undefined ? '' : p.changes[h.key])}"><button class="sm" data-pause="${h.key}">PAUSE</button><input placeholder="Comment" data-cm="${h.key}" value="${esc(h.comment)}"></div></div>`).join('') : '<div class="muted">Add messages to see the hours.</div>';
   renderMsgs(); renderSetup(); renderSync();
 }
 let SEL = null;                                       // messages ticked for deleting (by their text), null = not selecting
@@ -509,6 +510,10 @@ $('sCheck').addEventListener('click', e => { const d = e.target.dataset, p = cur
     document.querySelectorAll('#msgs .msg.hl').forEach(el => el.classList.remove('hl'));
     rows.forEach(el => el.classList.add('hl', 'open')); if (rows[0]) rows[0].scrollIntoView({block:'center', behavior:'smooth'}); }
 });
+$('hours').addEventListener('click', e => { const k = e.target.dataset.pause; if (k === undefined) return;   // PAUSE: rate 0 this hour + the hold comment
+  const p = cur(), HOLD = 'Client Asked To Hold Loading', old = (p.comments[k] || '').trim();
+  p.changes[k] = 0; p.comments[k] = !old || old.toLowerCase().includes(HOLD.toLowerCase()) ? (old || HOLD) : old + ' - ' + HOLD;   // a comment already typed stays
+  save(); render(); });
 $('hours').addEventListener('change', e => { const p = cur(), el = e.target;
   if (el.dataset.ch !== undefined) { if (el.value === '') delete p.changes[el.dataset.ch]; else p.changes[el.dataset.ch] = +el.value; }
   if (el.dataset.cm !== undefined) { if (el.value.trim() === '') delete p.comments[el.dataset.cm]; else p.comments[el.dataset.cm] = el.value.trim(); }
@@ -642,8 +647,9 @@ $('bXls').onclick = async () => {
     M.hours.forEach((h, i) => { const r = 20 + i, ch = p.changes[h.key];
       if (ch !== undefined && ch !== '') L.num('O' + r, +ch);
       const ask = h.auto !== null ? [['Client asked for ', 'FF000000'], [String(h.auto), 'FFFF0000'], [' m³/h.', 'FF000000']] : null;
-      if (h.comment && ask) { L.rich('J' + r, ask.concat([['\n' + h.comment, 'FF000000']])); two.push(r); }   // two lines in the same cell
-      else if (h.comment) L.str('J' + r, h.comment);
+      const cmc = /hold loading/i.test(h.comment) ? 'FFC00000' : 'FF000000';   // the hold comment (PAUSE) is red
+      if (h.comment && ask) { L.rich('J' + r, ask.concat([['\n' + h.comment, cmc]])); two.push(r); }   // two lines in the same cell
+      else if (h.comment) L.rich('J' + r, [[h.comment, cmc]]);
       else if (ask) L.rich('J' + r, ask); });
     if (two.length) {                                // taller rows, wrapped text (style 43 copied with wrapText)
       const S = load('xl/styles.xml'), xfs = S.getElementsByTagNameNS(NS, 'cellXfs')[0], all = Array.from(xfs.getElementsByTagNameNS(NS, 'xf'));
