@@ -259,7 +259,7 @@ function compute(p){
       const mins = Math.min(to, last) - Math.max(from, first);   // minutes of this hour inside the pour so far
       if (mins > 0) { wSum += req * mins; wMin += mins; }
       h.comment = p.comments[key] || '';
-      h.auto = ch !== undefined && ch !== '' ? ch : null;      // rate and comment in the same hour: both, one under the other
+      h.auto = !h.comment && ch !== undefined && ch !== '' ? ch : null;
       h.state = h.rate >= req ? 'g' : 'r';                     // no grey: the hour in progress is green or red too (user, 14-Oct-2026)
       M.hours.push(h);
     }
@@ -298,7 +298,7 @@ let PSTYLE = 'D';                                     // progress tile look in t
 const FONT = '"Segoe UI",Roboto,Arial,sans-serif';
 function draw(p, M){
   const cv = $('pic'), W = 880, X0 = 20, CW = W - 40, SC = 2;
-  const nRows = M.hours.length, tableTop = 428, RH = 27, rhOf = h => h.comment && h.auto !== null ? 42 : RH, rowsH = M.hours.reduce((a, h) => a + rhOf(h), 0), H = tableTop + 40 + rowsH + (nRows ? RH : 0) + 22;
+  const nRows = M.hours.length, tableTop = 428, RH = 27, H = tableTop + 40 + nRows * RH + (nRows ? RH : 0) + 22;
   cv.width = W * SC; cv.height = H * SC;
   const g = cv.getContext('2d'); g.setTransform(SC,0,0,SC,0,0);
   g.fillStyle = '#fff'; g.fillRect(0,0,W,H);
@@ -381,20 +381,20 @@ function draw(p, M){
   const cols = [130, ...act.map(() => 58), 74]; cols.push(CW - cols.reduce((a, b) => a + b, 0));
   const xs = []; cols.reduce((a, w) => (xs.push(a), a + w), X0);
   const heads = ['TIME', ...act.map(k => p.plants[k]), 'RATE|m³/h', 'COMMENTS'];
-  const tableH = 40 + rowsH + (nRows ? RH : 0);      // the whole table sits inside one rounded frame
+  const tableH = 40 + nRows * RH + (nRows ? RH : 0);      // the whole table sits inside one rounded frame
   g.save(); rr(X0 + .5, tableTop + .5, CW - 1, tableH - 1, 9); g.clip();
   g.fillStyle = C.navy; g.fillRect(X0, tableTop, CW, 40);
   heads.forEach((h, i) => { const cx = xs[i] + cols[i]/2, a = h.split('|'); if (a.length > 1) { text(a[0], cx, tableTop + 13, {size:13, color:'#fff', align:'center'}); text(a[1], cx, tableTop + 28, {size:12, color:'#fff', align:'center'}); } else text(h, cx, tableTop + 20, {size:13, color:'#fff', align:'center', max: cols[i] - 6});
     if (i) { g.strokeStyle = '#fff'; g.beginPath(); g.moveTo(xs[i] + .5, tableTop); g.lineTo(xs[i] + .5, tableTop + 40); g.stroke(); } });
   let y = tableTop + 40;
-  M.hours.forEach(h => { const RH = rhOf(h), two = h.comment && h.auto !== null;
+  M.hours.forEach(h => {
     box(xs[0], y, cols[0], RH, C.time); text(h.label, xs[0] + cols[0]/2, y + RH/2, {size:14, color:'#000', align:'center'});
     act.forEach((k, j) => { box(xs[j+1], y, cols[j+1], RH, '#fff'); if (h.plants[k]) text(fmt(h.plants[k]), xs[j+1] + cols[j+1]/2, y + RH/2, {size:14, bold:false, color:'#000', align:'center'}); });
     box(xs[RC], y, cols[RC], RH, h.state === 'g' ? C.gF : h.state === 'r' ? C.rF : C.pF); text(fmt(h.rate), xs[RC] + cols[RC]/2, y + RH/2, {size:14, italic: h.state === 'p', color: h.state === 'g' ? C.gT : h.state === 'r' ? C.rT : C.grey, align:'center'});
     const has = h.comment || h.auto !== null; box(xs[CC], y, cols[CC], RH, has ? C.yellow : '#fff');
-    if (h.comment) text(h.comment, xs[CC] + cols[CC]/2, y + RH/2 + (two ? 9 : 0), {size:13, bold:false, color:'#000', align:'center', max: cols[CC] - 12});
-    if (h.auto !== null) { const ay = y + RH/2 - (two ? 9 : 0); g.font = '13px ' + FONT; const a = 'Client asked for ', b = String(h.auto), c = ' m³/h.', wa = g.measureText(a).width, wb = g.measureText(b).width, wc = g.measureText(c).width; let x = xs[CC] + (cols[CC] - wa - wb - wc) / 2;
-      text(a, x, ay, {size:13, bold:false, color:'#000'}); text(b, x + wa, ay, {size:13, bold:false, color:'#FF0000'}); text(c, x + wa + wb, ay, {size:13, bold:false, color:'#000'}); }
+    if (h.comment) text(h.comment, xs[CC] + cols[CC]/2, y + RH/2, {size:13, bold:false, color:'#000', align:'center', max: cols[CC] - 12});
+    else if (h.auto !== null) { g.font = '13px ' + FONT; const a = 'Client asked for ', b = String(h.auto), c = ' m³/h.', wa = g.measureText(a).width, wb = g.measureText(b).width, wc = g.measureText(c).width; let x = xs[CC] + (cols[CC] - wa - wb - wc) / 2;
+      text(a, x, y + RH/2, {size:13, bold:false, color:'#000'}); text(b, x + wa, y + RH/2, {size:13, bold:false, color:'#FF0000'}); text(c, x + wa + wb, y + RH/2, {size:13, bold:false, color:'#000'}); }
     y += RH;
   });
   if (nRows) { box(X0, y, CW, RH, C.tot); text('TOTAL', xs[0] + cols[0]/2, y + RH/2, {size:14, color:'#000', align:'center'});
@@ -617,22 +617,10 @@ $('bXls').onclick = async () => {
     if (p.load && p.load !== 'full') L.num('P18', +p.load); else L.str('P18', 'Full capacity');   // Truck load
     if ((p.serialOk || []).length) L.str('P6', p.serialOk.slice().sort((a, b) => a - b).join(', '));   // serial numbers with no truck
     p.plants.forEach((name, i) => L.str('CDEFG'[i] + '19', name));
-    const two = [];                                // rows with rate + comment: taller, two lines in J
     M.hours.forEach((h, i) => { const r = 20 + i, ch = p.changes[h.key];
       if (ch !== undefined && ch !== '') L.num('O' + r, +ch);
-      const ask = h.auto !== null ? [['Client asked for ', 'FF000000'], [String(h.auto), 'FFFF0000'], [' m³/h.', 'FF000000']] : null;
-      if (h.comment && ask) { L.rich('J' + r, ask.concat([['\n' + h.comment, 'FF000000']])); two.push(r); }   // two lines in the same cell
-      else if (h.comment) L.str('J' + r, h.comment);
-      else if (ask) L.rich('J' + r, ask); });
-    if (two.length) {                                // taller rows, wrapped text (style 43 copied with wrapText)
-      const S = load('xl/styles.xml'), xfs = S.getElementsByTagNameNS(NS, 'cellXfs')[0], all = Array.from(xfs.getElementsByTagNameNS(NS, 'xf'));
-      const cj = L.doc.getElementsByTagNameNS(NS, 'c'), jx = Array.from(cj).find(c => c.getAttribute('r') === 'J' + two[0]), base = all[+(jx && jx.getAttribute('s')) || 0].cloneNode(true);
-      const al = base.getElementsByTagNameNS(NS, 'alignment')[0]; if (al) { al.removeAttribute('shrinkToFit'); al.setAttribute('wrapText', '1'); }
-      xfs.appendChild(base); xfs.setAttribute('count', all.length + 1); store('xl/styles.xml', S);
-      const rowEls = Array.from(L.doc.getElementsByTagNameNS(NS, 'row'));
-      two.forEach(r => { Array.from(cj).find(c => c.getAttribute('r') === 'J' + r).setAttribute('s', all.length);
-        const re = rowEls.find(x => x.getAttribute('r') === String(r)); if (re) { re.setAttribute('ht', '33'); re.setAttribute('customHeight', '1'); } });
-    }
+      if (h.comment) L.str('J' + r, h.comment);
+      else if (h.auto !== null) L.rich('J' + r, [['Client asked for ', 'FF000000'], [String(h.auto), 'FFFF0000'], [' m³/h.', 'FF000000']]); });
     p.msgs.slice(0, 1000).forEach((m, i) => { G.str('B' + (2 + i), m.t); if (m.r) typeof m.r === 'number' ? G.num('F' + (2 + i), m.r) : G.str('F' + (2 + i), 'x');
       if (m.ok) G.str('N' + (2 + i), 'ok'); });   // load accepted ("I loaded it like this")
     store(sheetPath.Log, L.doc); store(sheetPath.Messages, G.doc);
@@ -640,7 +628,6 @@ $('bXls').onclick = async () => {
     // The file has no macros (Windows blocks macros in downloaded files), so the shapes the Excel macro
     // normally updates are set here: progress blocks, AVG / REJECTED colours, tile texts and the table frame.
     const geo = await (await fetch('template-geo.json', {cache:'no-cache'})).json();
-    two.forEach(r => { const d = 33 - (geo.rowTop[r] - geo.rowTop[r - 1]); geo.rowTop = geo.rowTop.map((y, k) => k >= r ? y + d : y); });   // rowTop[k] is the top of row k+1
     // plants that loaded nothing: their columns (C..G) are hidden, like the Excel's LayoutTiles macro does
     const anyLoad = M.totals.some(v => v > 0), idle = anyLoad ? [0, 1, 2, 3, 4].filter(k => !(M.totals[k] > 0)).map(k => k + 3) : [];
     if (idle.length) {
