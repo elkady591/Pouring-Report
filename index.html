@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#1F3864">
-<meta name="app-build" content="20261118-1">
+<meta name="app-build" content="20261118-2">
 <title>Pouring Report</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png?v=3">
@@ -54,7 +54,10 @@ textarea{min-height:120px;resize:vertical;direction:ltr}
 .hour .h span{flex:1}
 .chip{display:inline-block;min-width:54px;text-align:center;border-radius:6px;padding:2px 6px;font-weight:700}
 .chip.g{background:#C6EFCE;color:#006100}.chip.r{background:#FFC7CE;color:#9C0006}.chip.p{background:#EDEDED;color:var(--grey);font-style:italic}
-.hour .e{display:grid;grid-template-columns:110px auto 1fr;gap:8px;margin-top:6px}
+.hour .e{display:grid;grid-template-columns:1fr auto auto;gap:6px;margin-top:6px}
+.hour .e [data-cm]{grid-column:1/-1}
+.hour .e button.add{color:#595959;border-color:#8c8c8c}.hour .e button.add.on{background:#8c8c8c;color:#fff}
+.chip.a{background:#EDEDED;color:var(--grey)}
 .hour .e button{padding:6px 10px;font-size:13px;font-weight:700;color:#C00000;border-color:#C00000;white-space:nowrap}
 .hour .e input{padding:6px 8px;font-size:14px}
 .msg{border-top:1px solid #e6e9ef;padding:7px 0;font-size:13.5px}
@@ -252,6 +255,10 @@ function compute(p){
     let start = Math.round(first / 15) * 15;
     if (p.start) { const a = p.start.split(':'); start = +a[0]*60 + +a[1]; }
     const nH = Math.max(1, Math.min(48, Math.floor((last - start) / 60) + 1));
+    // ADDITIONAL: the client stopped in hour p.addFrom and asked for additional quantity afterwards. Those later
+    // hours are grey and left out of ACTUAL AVG RATE and AVG REQUESTED RATE (TOTAL / quantities still count them)
+    const cut = p.addFrom !== undefined && p.addFrom !== null && p.addFrom !== '' ? +p.addFrom + 60 : null;
+    const main = cut === null ? timed : timed.filter(r => r.t < cut), lastM = main.length ? Math.max(...main.map(r => r.t)) : first;
     let req = +p.req || 0, wSum = 0, wMin = 0;
     for (let i = 0; i < nH; i++) {
       const lab = start + 60*i, from = i === 0 ? Math.min(start, first) : lab, to = lab + 60, key = String(lab);
@@ -261,19 +268,22 @@ function compute(p){
       h.changed = ch !== undefined && ch !== '' && +ch !== req;
       if (ch !== undefined && ch !== '') req = +ch;
       h.req = req;
-      const mins = Math.min(to, last) - Math.max(from, first);   // minutes of this hour inside the pour so far
+      h.add = cut !== null && lab >= cut;
+      const mins = Math.min(to, lastM) - Math.max(from, first);  // minutes of this hour inside the pour so far (additional hours: none)
       if (mins > 0) { wSum += req * mins; wMin += mins; }
       h.comment = p.comments[key] || '';
       h.auto = ch !== undefined && ch !== '' ? ch : null;      // rate and comment in the same hour: both, one under the other
       if (+h.auto === 0 && /hold loading/i.test(h.comment)) h.auto = null;   // the hold comment already says the rate is 0
-      h.state = h.rate >= req ? 'g' : 'r';                     // no grey: the hour in progress is green or red too (user, 14-Oct-2026)
+      h.state = h.add ? 'a' : h.rate >= req ? 'g' : 'r';       // no grey for the hour in progress (user, 14-Oct-2026); grey = additional quantity
       M.hours.push(h);
     }
     M.first = first; M.last = last; M.start = start; M.reqNow = req;
     // what the client asked for on average over the same time as our average: each rate counts for the
     // minutes it was in force, so raising the rate late in the pour does not turn our average red
     M.reqAvg = wMin > 0 ? wSum / wMin : req;
-    M.avg = last - first >= 30 ? M.loaded / ((last - first) / 60) : null;
+    M.avg = cut === null ? (last - first >= 30 ? M.loaded / ((last - first) / 60) : null)
+      : (lastM - first >= 30 ? main.reduce((a, r) => a + (r.qty || 0), 0) / ((lastM - first) / 60) : null);
+    M.addFrom = cut === null ? null : cut - 60;
   } else { M.reqNow = M.reqAvg = +p.req || 0; M.avg = null; }
   M.avgOk = M.avg !== null && Math.round(M.avg) >= Math.round(M.reqAvg);
   // once the client changed the rate: big = AVG REQUESTED RATE, small = the rate on the pouring card (Setup)
@@ -379,7 +389,8 @@ function draw(p, M){
       if (bh > 0) { g.beginPath(); g.moveTo(bx, base); g.lineTo(bx, by + br); g.arcTo(bx, by, bx + br, by, br); g.lineTo(bx + bw - br, by); g.arcTo(bx + bw, by, bx + bw, by + br, br); g.lineTo(bx + bw, base); g.closePath(); g.fill(); }
       lbl(h.end, cx, i); });
     g.strokeStyle = C.navy; g.lineWidth = 2.5; g.setLineDash([9,6]); g.beginPath();
-    M.hours.forEach((h, i) => { const x1 = X0 + padL + slot * i + (i ? 0 : slot * .12), x2 = X0 + padL + slot * (i + 1) - (i === nRows - 1 ? slot * .12 : 0), y = yOf(h.req); if (i) g.lineTo(x1, y); else g.moveTo(x1, y); g.lineTo(x2, y); });
+    const nMain = M.hours.filter(h => !h.add).length;   // the line stops where the additional quantity starts
+    M.hours.slice(0, nMain).forEach((h, i) => { const x1 = X0 + padL + slot * i + (i ? 0 : slot * .12), x2 = X0 + padL + slot * (i + 1) - (i === nMain - 1 ? slot * .12 : 0), y = yOf(h.req); if (i) g.lineTo(x1, y); else g.moveTo(x1, y); g.lineTo(x2, y); });
     g.stroke(); g.setLineDash([]);
     { const lx = X0 + CW - 14, ly = CY + 13;         // small key: the dashed line is what the client asked for
       text('Requested rate', lx, ly, {size:10.5, bold:false, color:C.navy, align:'right'});
@@ -430,7 +441,7 @@ function render(){
     `<div class="tile wide"><span>PROGRESS${M.progress === null ? '' : ' · ' + Math.round(M.progress*100) + '%'} · ${M.trucks} TRUCKS${M.toCheck ? ' · <span style="display:inline;color:#9a5b00">⚠ ' + M.toCheck + ' TO CHECK</span>' : ''}</span><div class="blocks">${Array.from({length:20}, (_, i) => `<i class="${i < Math.round(Math.max(0, Math.min(1, M.progress || 0)) * 20) ? 'on' : ''}"></i>`).join('')}</div></div>`;
   draw(p, M);
   $('hours').innerHTML = M.hours.length ? M.hours.map(h => `<div class="hour"><div class="h"><span>${h.label}</span><em class="muted" style="font-style:normal">${h.trucks} trucks</em><i class="chip ${h.state}" style="font-style:${h.state === 'p' ? 'italic' : 'normal'}">${fmt(h.rate)}</i></div>
-      <div class="e"><input type="number" inputmode="decimal" placeholder="Client asked" data-ch="${h.key}" value="${esc(p.changes[h.key] === undefined ? '' : p.changes[h.key])}"><button class="sm" data-pause="${h.key}">PAUSE</button><input placeholder="Comment" data-cm="${h.key}" value="${esc(h.comment)}"></div></div>`).join('') : '<div class="muted">Add messages to see the hours.</div>';
+      <div class="e"><input type="number" inputmode="decimal" placeholder="Client asked" data-ch="${h.key}" value="${esc(p.changes[h.key] === undefined ? '' : p.changes[h.key])}"><button class="sm" data-pause="${h.key}">PAUSE</button><button class="sm add${String(M.addFrom) === h.key ? ' on' : ''}" data-add="${h.key}" title="Client stopped here and will ask for additional quantity">ADDITIONAL</button><input placeholder="Comment" data-cm="${h.key}" value="${esc(h.comment)}"></div></div>`).join('') : '<div class="muted">Add messages to see the hours.</div>';
   renderMsgs(); renderSetup(); renderSync();
 }
 let SEL = null;                                       // messages ticked for deleting (by their text), null = not selecting
@@ -516,6 +527,12 @@ $('sCheck').addEventListener('click', e => { const d = e.target.dataset, p = cur
     document.querySelectorAll('#msgs .msg.hl').forEach(el => el.classList.remove('hl'));
     rows.forEach(el => el.classList.add('hl', 'open')); if (rows[0]) rows[0].scrollIntoView({block:'center', behavior:'smooth'}); }
 });
+$('hours').addEventListener('click', e => { const a = e.target.dataset.add; if (a === undefined) return;   // ADDITIONAL: on / off for this hour
+  const p = cur(), ADD = 'Client asked to hold and wait for Additional Quantity.', old = (p.comments[a] || '').trim();
+  if (String(p.addFrom) === a) { p.addFrom = null; if (old === ADD) delete p.comments[a]; else if (old.endsWith(' - ' + ADD)) p.comments[a] = old.slice(0, -(ADD.length + 3)); }
+  else { if (p.addFrom !== undefined && p.addFrom !== null && (p.comments[p.addFrom] || '') === ADD) delete p.comments[p.addFrom];   // only one start
+    p.addFrom = a; p.comments[a] = !old || old.includes(ADD) ? (old || ADD) : old + ' - ' + ADD; }
+  save(); render(); });
 $('hours').addEventListener('click', e => { const k = e.target.dataset.pause; if (k === undefined) return;   // PAUSE: rate 0 this hour + the hold comment
   const p = cur(), HOLD = 'Client Asked To Hold Loading', old = (p.comments[k] || '').trim();
   p.changes[k] = 0; p.comments[k] = !old || old.toLowerCase().includes(HOLD.toLowerCase()) ? (old || HOLD) : old + ' - ' + HOLD;   // a comment already typed stays
@@ -669,6 +686,8 @@ $('bXls').onclick = async () => {
     p.msgs.slice(0, 1000).forEach((m, i) => { G.str('B' + (2 + i), m.t); if (m.r) typeof m.r === 'number' ? G.num('F' + (2 + i), m.r) : G.str('F' + (2 + i), 'x');
       if (m.ok) G.str('N' + (2 + i), 'ok'); });   // load accepted ("I loaded it like this")
     store(sheetPath.Log, L.doc); store(sheetPath.Messages, G.doc);
+    if (M.addFrom !== null && M.addFrom !== undefined && sheetPath.Calc) {   // ADDITIONAL: the minute the additional quantity starts (Calc!M16)
+      const K = sheet(sheetPath.Calc); K.num('M16', M.addFrom + 60); store(sheetPath.Calc, K.doc); }
 
     // The file has no macros (Windows blocks macros in downloaded files), so the shapes the Excel macro
     // normally updates are set here: progress blocks, AVG / REJECTED colours, tile texts and the table frame.
