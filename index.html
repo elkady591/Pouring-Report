@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#1F3864">
-<meta name="app-build" content="20261125-1">
+<meta name="app-build" content="20261125-2">
 <title>Pouring Report</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png?v=3">
@@ -188,6 +188,10 @@ function parseMsg(t){
   const o = {raw:null, plant:null, qty:null, serial:null};
   const tm = t.match(/(?:^|[^\d])(\d{1,2}):(\d{2})(?!\d)/);
   if (tm && +tm[1] < 24 && +tm[2] < 60) o.raw = +tm[1]*60 + +tm[2];
+  if (o.raw === null) {                          // time written with a dot: "09.26" (a word on its own, not "6.5m")
+    const td = t.match(/(?:^|[\s*_])(\d{1,2})\.(\d{2})(?=[\s*_]|$)/);
+    if (td && +td[1] < 24 && +td[2] < 60) o.raw = +td[1]*60 + +td[2];
+  }
   const pm = t.match(/#\s*([1-5])/); if (pm) o.plant = +pm[1] - 1;
   const qm = t.match(/(\d+(?:\.\d+)?)\s*[mMم](?![A-Za-z])/); if (qm) o.qty = +qm[1];
   if (o.raw !== null || o.plant !== null) { const s = t.replace(/[*_]/g,'').trim(), sm = s.match(/^(\d{1,4})(?!\d)/); if (sm) o.serial = +sm[1];
