@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#1F3864">
-<meta name="app-build" content="20261118-2">
+<meta name="app-build" content="20261125-1">
 <title>Pouring Report</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png?v=3">
@@ -115,6 +115,7 @@ textarea{min-height:120px;resize:vertical;direction:ltr}
         <div><label>Requested rate (m³/h)</label><input id="sReq" type="number" inputmode="decimal" data-k="req"></div></div>
       <label>Truck load in this pour (checked on every message)</label>
       <select id="sLoad" data-k="load"><option value="full">Full capacity — trucks 101–107 = 10 m³, others = 12 m³</option>
+        <option value="full-1">Full − 1 m³ — trucks 101–107 = 9 m³, others = 11 m³</option><option value="full-2">Full − 2 m³ — trucks 101–107 = 8 m³, others = 10 m³</option>
         <option value="1">1 m³ every truck</option><option value="2">2 m³ every truck</option><option value="3">3 m³ every truck</option><option value="4">4 m³ every truck</option>
         <option value="5">5 m³ every truck</option><option value="6">6 m³ every truck</option><option value="7">7 m³ every truck</option><option value="8">8 m³ every truck</option>
         <option value="9">9 m³ every truck</option><option value="10">10 m³ every truck</option><option value="11">11 m³ every truck</option><option value="12">12 m³ every truck</option></select>
@@ -217,11 +218,13 @@ function compute(p){
     else if (r.t - r.raw >= 1440) r.flag = 'next day';
     else if (r.t - r.raw >= 720) r.flag = '12h → 24h';
     if (!r.warn && r.qty !== null) {                 // load check: the pour's Truck load (Setup) and the truck's biggest load
-      const fixed = p.load && p.load !== 'full' ? +p.load : null, max = r.truck ? truckMax(r.truck) : null;
+      // 'full' / 'full-1' / 'full-2' = each truck's full load minus 0, 1 or 2 m³ (12 → 11, 10 → 9 …); a number = that load for every truck
+      const lf = String(p.load || 'full'), minus = lf.startsWith('full') ? (+lf.slice(5) || 0) : 0;
+      const fixed = lf.startsWith('full') ? null : +lf, max = r.truck ? truckMax(r.truck) : null;
       let why = '';
       if (max !== null && r.qty > max) why = `Truck ${r.truck} max ${max} m³ — message says ${fmt(r.qty)}`;
       else if (fixed !== null && r.qty !== fixed) why = `Load should be ${fixed} m³ — message says ${fmt(r.qty)}`;
-      else if (fixed === null && max !== null && r.qty !== max) why = `Truck ${r.truck} is ${max} m³ — message says ${fmt(r.qty)}`;
+      else if (fixed === null && max !== null && r.qty !== max - minus) why = `Truck ${r.truck} is ${max - minus} m³${minus ? ' (full − ' + minus + ')' : ''} — message says ${fmt(r.qty)}`;
       if (why && m.ok) r.flag = 'Load OK ✓ (you checked it)';
       else if (why) { r.flag = why; r.warn = true; r.loadWarn = true; }
     }
@@ -663,7 +666,8 @@ $('bXls').onclick = async () => {
     if (p.start) { const a = p.start.split(':'); L.num('P13', (+a[0] * 60 + +a[1]) / 1440); }
     L.num('P14', p.rejManual === '' ? '' : +p.rejManual);
     if (p.finished) L.str('P15', 'Yes');              // "Pour finished" in the sheet: EXPECTED FINISH shows —
-    if (p.load && p.load !== 'full') L.num('P18', +p.load); else L.str('P18', 'Full capacity');   // Truck load
+    const lf = String(p.load || 'full');   // Truck load
+    if (!lf.startsWith('full')) L.num('P18', +lf); else L.str('P18', lf === 'full' ? 'Full capacity' : 'Full - ' + lf.slice(5));
     if ((p.serialOk || []).length) L.str('P6', p.serialOk.slice().sort((a, b) => a - b).join(', '));   // serial numbers with no truck
     p.plants.forEach((name, i) => L.str('CDEFG'[i] + '19', name));
     const two = [];                                // rows with rate + comment: taller, two lines in J
