@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#1F3864">
-<meta name="app-build" content="20261125-3">
+<meta name="app-build" content="20261125-4">
 <title>Pouring Report</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png?v=3">
@@ -249,6 +249,8 @@ function compute(p){
              toCheck: rows.filter(r => r.warn && !r.dup).length + missing.length};
   M.loaded = live.reduce((a, r) => a + (r.qty || 0), 0);
   M.rejected = live.reduce((a, r) => a + r.rejQty, 0) + (+p.rejManual || 0);
+  M.rejTrucks = live.filter(r => r.rejQty > 0).length;   // trucks marked rejected (whole or part)
+  M.rejTxt = M.rejTrucks ? M.rejTrucks + (M.rejTrucks === 1 ? ' TRUCK' : ' TRUCKS') : '';
   M.q = +p.q || 0;
   M.remaining = p.q === '' ? null : M.q - M.loaded + M.rejected;
   // past the total quantity: the extra trucks are "Additional quantity", shown positive and green (not -7)
@@ -358,7 +360,9 @@ function draw(p, M){
   if (M.target) text(M.target, rt.x + rt.w/2, rt.y + 50, {size:9.5, color:C.grey, align:'center', max: rt.w - 10});
   tile(1,0,1,'ACTUAL AVG RATE', M.avg === null ? '' : M.avg.toFixed(0) + ' m³/h', M.avg === null ? C.navy : (M.avgOk ? C.green : C.red));
   tile(2,0,1,'TOTAL', fmt(M.loaded - M.rejected) + ' m³');          // actually poured: loaded minus rejected
-  tile(3,0,1,'REJECTED', fmt(M.rejected) + ' m³', M.rejected > 0 ? C.red : C.navy);
+  { const rt4 = tile(3,0,1,'REJECTED', null);   // how many trucks were rejected, small under the m³
+    text(fmt(M.rejected) + ' m³', rt4.x + rt4.w/2, rt4.y + (M.rejTxt ? 34 : 38), {size:20, color: M.rejected > 0 ? C.red : C.navy, align:'center', max: rt4.w - 14});
+    if (M.rejTxt) text(M.rejTxt, rt4.x + rt4.w/2, rt4.y + 50, {size:9.5, color:C.grey, align:'center', max: rt4.w - 10}); }
   const pct = M.progress === null ? '' : Math.round(M.progress * 100) + '%', poured = fmt(M.loaded - M.rejected) + ' of ' + fmt(M.q) + ' m³';
   const pt = tile(0,1,2, PSTYLE === 'A' ? 'PROGRESS' + (pct ? ' · ' + pct : '') : PSTYLE === 'E' ? '' : 'PROGRESS', null);
   if (M.progress !== null) { const pr = Math.max(0, Math.min(1, M.progress));
@@ -452,7 +456,7 @@ function render(){
   $('tiles').innerHTML =
     t('TOTAL', fmt(M.loaded - M.rejected) + ' m³') + t(M.remLabel, M.remaining === null ? '—' : M.remText, M.extra ? 'good' : '') +
     t('ACTUAL AVG RATE', M.avg === null ? '—' : M.avg.toFixed(0) + ' m³/h', M.avg === null ? '' : (M.avgOk ? 'good' : 'bad')) + t(M.reqLabel, fmt(M.reqBig) + ' m³/h' + (M.target ? '<small style="display:block;font-size:10px;font-weight:600;color:var(--grey)">' + M.target + '</small>' : '')) +
-    t('EXPECTED FINISH', '<span style="display:inline;font-size:16px;color:inherit;letter-spacing:0">' + M.finish + '</span>') + t('REJECTED', fmt(M.rejected) + ' m³', M.rejected > 0 ? 'bad' : '') +
+    t('EXPECTED FINISH', '<span style="display:inline;font-size:16px;color:inherit;letter-spacing:0">' + M.finish + '</span>') + t('REJECTED', fmt(M.rejected) + ' m³' + (M.rejTxt ? '<small style="display:block;font-size:10px;font-weight:600;color:var(--grey)">' + M.rejTxt + '</small>' : ''), M.rejected > 0 ? 'bad' : '') +
     `<div class="tile wide"><span>PROGRESS${M.progress === null ? '' : ' · ' + Math.round(M.progress*100) + '%'} · ${M.trucks} TRUCKS${M.toCheck ? ' · <span style="display:inline;color:#9a5b00">⚠ ' + M.toCheck + ' TO CHECK</span>' : ''}</span><div class="blocks">${Array.from({length:20}, (_, i) => `<i class="${i < Math.round(Math.max(0, Math.min(1, M.progress || 0)) * 20) ? 'on' : ''}"></i>`).join('')}</div></div>`;
   draw(p, M);
   $('hours').innerHTML = M.hours.length ? M.hours.map(h => `<div class="hour"><div class="h"><span>${h.label}</span><em class="muted" style="font-style:normal">${h.trucks} trucks</em><i class="chip ${h.state}" style="font-style:${h.state === 'p' ? 'italic' : 'normal'}">${fmt(h.rate)}</i></div>
@@ -779,6 +783,11 @@ $('bXls').onclick = async () => {
       if (xf) { const off = xf.getElementsByTagNameNS(DA, 'off')[0], ext = xf.getElementsByTagNameNS(DA, 'ext')[0];
         const x = +off.getAttribute('x') / EMU, y = +off.getAttribute('y') / EMU, wd = +ext.getAttribute('cx') / EMU, h = +ext.getAttribute('cy') / EMU, up = M.target ? 6 : 0;
         place('tileVal_1', x + 4, y + 15 - up, x + wd - 4, y + h - 2 - up); place('tileSub_1', x, y + h - 12, x + wd, y + h - 2); }
+      const b4 = shape('tileBg_4'), x4 = b4 && b4.sp.getElementsByTagNameNS(DA, 'xfrm')[0];   // rejected trucks under REJECTED
+      if (x4) { const off = x4.getElementsByTagNameNS(DA, 'off')[0], ext = x4.getElementsByTagNameNS(DA, 'ext')[0];
+        const x = +off.getAttribute('x') / EMU, y = +off.getAttribute('y') / EMU, wd = +ext.getAttribute('cx') / EMU, h = +ext.getAttribute('cy') / EMU, up = M.rejTxt ? 6 : 0;
+        place('tileVal_4', x + 4, y + 15 - up, x + wd - 4, y + h - 2 - up); place('tileSub_4', x, y + h - 12, x + wd, y + h - 2); }
+      textOf('tileSub_4', M.rejTxt || ' ');
     }
     if (M.hours.length) {
       const x1 = geo.colLeft[1], x2 = geo.colLeft[13], y1 = geo.rowTop[18], y2 = geo.rowTop[20 + M.hours.length], cs = geo.corner;
